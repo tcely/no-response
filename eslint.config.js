@@ -3,6 +3,10 @@ import tsParser from '@typescript-eslint/parser'
 
 export default [
   {
+    // Global ignores must be in their own object without a 'files' key
+    ignores: ["bin/**", "lib/**", "dist/**", "node_modules/**"]
+  },
+  {
     files: ['src/**/*.ts', 'test/**/*.ts'],
     plugins: {
       github: github

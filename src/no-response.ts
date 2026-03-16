@@ -1,10 +1,9 @@
+import * as fs from 'node:fs'
 import * as core from '@actions/core'
-import * as fs from 'fs'
 import * as github from '@actions/github'
 import * as scramjet from 'scramjet'
 
 import Config from './config'
-import { GitHub } from '@actions/github/lib/utils'
 
 /* eslint-disable import/no-unresolved, import/named */
 import { RequestInterface } from '@octokit/types'
@@ -33,7 +32,7 @@ interface RestIssue {
 
 export default class NoResponse {
   config: Config
-  octokit: InstanceType<typeof GitHub>
+  octokit: ReturnType<typeof github.getOctokit>
 
   constructor(config: Config) {
     this.config = config

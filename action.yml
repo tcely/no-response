@@ -37,7 +37,7 @@ runs:
         shopt -s nullglob
         dir="$(realpath .remote-action-hashFiles)" &&
           rm -v -rf "${dir}" &&
-          mkdir -v .action-hash-input &&
+          mkdir -v "${dir}" &&
           cd "${{ github.action_path }}" &&
           cp -v -a -t "${dir}/" src package.json *.lock *-lock.json
         exit 0

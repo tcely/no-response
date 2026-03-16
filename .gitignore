@@ -1,2 +1,12 @@
+.DS_Store
+
+# Build artifacts
+bin/
+dist/
 lib/
+
+# Dependencies
 node_modules/
+
+# Bun specific
+bun.lockb 

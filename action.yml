@@ -35,7 +35,7 @@ runs:
       uses: actions/cache@v5
       with:
         path: ${{ github.action_path }}/bin/no-response-bin
-        key: no-response-bin-${{ runner.os }}-${{ hashFiles('src/**/*.ts', 'bun.lock', 'package-lock.json', 'package.json') }}
+        key: no-response-bin-${{ runner.os }}-${{ hashFiles('src/**/*.ts', '*.lock', '*-lock.json', 'package.json') }}
 
     - name: Checkout
       if: steps.cache-binary.outputs.cache-hit != 'true'

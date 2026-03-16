@@ -2,8 +2,8 @@
 
 A GitHub Action that closes Issues where the author hasn't responded to a request for more information.
 
-It was forked from https://github.com/lee-dohm/no-response
-On top of the functionality offered in the original action, this one also adds back a label on the removal of the `responseRequiredLabel`
+This is a fork of [MBilalShafi/no-response-add-label](https://github.com), which was originally forked from [lee-dohm/no-response](https://github.com/lee-dohm/no-response).
+On top of the original functionality, this version adds an optional label back to the issue once the `responseRequiredLabel` is removed.
 
 ## Use
 
@@ -12,8 +12,6 @@ Recommended basic configuration:
 ```yaml
 name: No Response
 
-# `issues`.`closed`, `issue_comment`.`created`, and `scheduled` event types are required for this Action
-# to work properly.
 on:
   issues:
     types: [closed]
@@ -27,12 +25,12 @@ jobs:
   noResponse:
     runs-on: ubuntu-latest
     steps:
-      - uses: MBilalShafi/no-response@v0.0.6
+      - uses: tcely/no-response@v0.1.0
         with:
           token: ${{ github.token }}
 ```
 
-Another example with further configurations:
+Example with custom configurations:
 
 ```yaml
 name: No Response
@@ -45,102 +43,55 @@ on:
   issue_comment:
     types: [created]
   schedule:
-    # Schedule for five minutes after the hour, every hour
-    - cron: '5 * * * *'
+    # Schedule for thirty-five minutes after the hour, every hour
+    - cron: '35 * * * *'
 
 jobs:
   noResponse:
     runs-on: ubuntu-latest
     steps:
-      - uses: MBilalShafi/no-response@v0.0.6
+      - uses: tcely/no-response@v0.1.0
         with:
           token: ${{ github.token }}
-          # auto close issues with no response from author for 7 days
+          # Auto close after 7 days of inactivity
           daysUntilClose: 7
-          # label to use to track when a response is required (once a response is made, this label will be auto removed)
-          # if the label doesn't exist, it will be auto-created
-          responseRequiredLabel: "status: waiting for author's response"
-          # once the responseRequiredLabel is removed, this one will be added for tracking on maintainers' side
-          optionalFollowupLabel: "status: waiting for maintainer's response"
-          # this comment will be posted when closing the issue
+          # Label to track when a response is required
+          responseRequiredLabel: "status: waiting for author"
+          # Label to add once the author responds
+          optionalFollowUpLabel: "status: review required"
+          # Custom close comment
           closeComment: >
-            The issue has not been closed due to no response from the author, feel free to reopen
+            This issue was closed due to lack of response. Please respond if you have the requested info!
 ```
-
 
 ### Inputs
 
-See [`action.yml`](action.yml) for defaults.
+See [`action.yml`](action.yml) for full defaults.
 
-```tsx
-// Markdown text to post as a comment when an issue is going to be closed. Set to `false` to disable commenting when closing an issue.
-closeComment?: string;
 
-// Number of days to wait for a response from the original author before closing.
-daysUntilClose?: number;
-
-// Text of the label used to indicate that a response from the original author is required.
-// @default 'needs-more-information'
-responseRequiredLabel?: string;
-
-// Color for the `responseRequiredLabel`, encoded as a hex string. **Only** used when creating the label if it does not already exist.
-// @default 'ffffff'
-responseRequiredColor?: string;
-
-// Text of the label that will be added back when the `responseRequiredLabel` is removed due to author responding back.
-optionalFollowupLabel?: string;
-
-// Color for the `optionalFollowupLabel`, encoded as a hex string. **Only** used when creating the label if it does not already exist.
-// @default 'ffffff'
-optionalFollowupLabelColor?: string;
-
-// Token used to access repo information. The default GitHub Actions token is sufficient.
-token: string;
-```
-
-### Outputs
-
-None.
+| Input | Description | Default |
+| :--- | :--- | :--- |
+| `token` | **Required**. GitHub token (e.g. `${{ github.token }}`) | N/A |
+| `daysUntilClose` | Days to wait before closing an inactive issue. | `14` |
+| `responseRequiredLabel` | Label indicating a response is needed. | `more-information-needed` |
+| `responseRequiredColor` | Hex color for the response label. | `ffffff` |
+| `optionalFollowUpLabel` | Label to add after the author responds. | `undefined` |
+| `optionalFollowUpLabelColor` | Hex color for the follow-up label. | `ffffff` |
+| `closeComment` | Comment to post on close. Set to `false` to disable. | (Standard message) |
 
 ## Action flow
 
-The intent of this Action is to close issues that have not received a response to a maintainer's request for more information. Many times issues will be filed without enough information to be properly investigated. This Action allows maintainers to label an issue as requiring more information from the original author. If the information is not received in a timely manner, the issue will be closed. If the original author comes back and gives more information, the label is removed and the issue is reopened, if necessary.
-
 ### Scheduled
-
-At the scheduled times, it searches for issues that are:
-
-- Open
-- Have a label named the same as the `responseRequiredLabel` value in the configuration
-- The `responseRequiredLabel` was applied more than `daysUntilClose` ago
-
-For each issue found, it:
-
-1. If `closeComment` is not `false`, posts the contents of `closeComment`
-2. Closes the issue
+Searches for open issues with the `responseRequiredLabel` that were labeled more than `daysUntilClose` ago. It will post the `closeComment` and close the issue.
 
 ### `issue_comment` Event
-
-When an `issue_comment` event is received, if all of the following are true:
-
-- The author of the comment is the original author of the issue
-- The issue has a label named the same as the `responseRequiredLabel` value in the configuration
-
-It will:
-
-1. Remove the `responseRequiredLabel`
-2. Reopen the issue if it was closed by someone other than the original author of the issue
-3. If `optionalFollowupLabel` is passed in the config, add it to the issue
+If the original author comments on an issue marked with `responseRequiredLabel`:
+1. Removes `responseRequiredLabel`.
+2. Reopens the issue (if it was closed by someone else).
+3. Adds `optionalFollowUpLabel` (if configured).
 
 ### `issues` Event
-
-When an `issues` event is received, if all of the following are true:
-
-- The issue was closed (i.e. `action: closed`)
-- The user which closed the issue is the same as the original author of the issue
-- The `optionalFollowupLabel` is passed in the config, and added as a label to the issue
-
-It will remove the `optionalFollowupLabel`
+If the original author closes the issue, the action will remove the `optionalFollowUpLabel` to keep the issue state clean.
 
 ## License
 

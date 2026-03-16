@@ -1,48 +1,41 @@
 {
-  "name": "no-response-add-label",
-  "version": "0.0.6",
+  "name": "no-response-tcely",
+  "version": "0.1.0",
   "private": true,
   "description": "A GitHub Action that closes Issues where the author hasn't responded to a request for more information",
-  "main": "dist/index.js",
+  "main": "src/main.ts",
+  "type": "module",
   "scripts": {
-    "build": "npx ncc build ./src/main.ts",
-    "ci": "npm run format-check && npm run lint && npm test",
-    "format": "prettier --write **/*.ts **/*.md **/*.yaml **/*.yml",
-    "format-check": "prettier --check **/*.ts **/*.md **/*.yaml **/*.yml",
-    "lint": "npx eslint src/**/*.ts",
-    "start": "npx ncc run ./src/main.ts",
-    "test": "jest"
+    "ci": "bun run format && bun run lint && bun run test",
+    "build": "bun build --compile --outfile bin/no-response-bin ./src/main.ts",
+    "format:write": "bun x -- prettier --write **/*.ts **/*.md **/*.yaml **/*.yml",
+    "format": "bun x -- prettier --check **/*.ts **/*.md **/*.yaml **/*.yml",
+    "lint": "bun x -- eslint src/**/*.ts",
+    "test": "bun test"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MBilalShafi/no-response-add-label.git"
+    "url": "git+https://github.com/tcely/no-response.git"
   },
   "keywords": [
     "actions",
-    "node",
-    "setup"
+    "bun",
+    "typescript"
   ],
   "author": "lee-dohm",
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.4.0",
-    "@actions/github": "^5.0.0",
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
     "scramjet": "^4.36.0"
   },
   "devDependencies": {
-    "@octokit/webhooks-types": "^4.1.0",
-    "@types/jest": "^26.0.24",
-    "@types/node": "^16.3.1",
-    "@typescript-eslint/parser": "^4.28.3",
-    "@vercel/ncc": "^0.38.0",
-    "eslint": "^7.30.0",
-    "eslint-plugin-github": "^4.3.2",
-    "eslint-plugin-jest": "^24.3.6",
-    "extract-pr-titles": "^1.1.0",
-    "jest": "^27.0.6",
-    "js-yaml": "^4.1.0",
-    "prettier": "2.3.2",
-    "ts-jest": "^27.0.3",
-    "typescript": "^4.7.2"
+    "@octokit/webhooks-types": "^7.6.1",
+    "@types/node": "^24.0.0",
+    "@typescript-eslint/parser": "^8.57.0",
+    "eslint": "^9.21.0",
+    "eslint-plugin-github": "^5.1.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
   }
 }

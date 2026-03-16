@@ -9,7 +9,25 @@ jobs:
   unitTest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.3.4
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - run: npm ci
-      - run: npm run ci
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Test & Build Binary
+        shell: bash
+        run: |
+          # Ensure a lockfile exists for the frozen install
+          test -s bun.lock || bun install --lockfile-only
+
+          # Install all dependencies (including dev) for CI/Tests
+          bun install --frozen-lockfile
+
+          # Run lint, format check, and bun test via your 'ci' script
+          bun run ci
+
+          # Verify compilation works
+          mkdir -p bin
+          bun build --compile --outfile bin/no-response-bin ./src/main.ts
+          chmod a+rx bin/no-response-bin

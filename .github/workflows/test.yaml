@@ -11,5 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v2.3.4
 
-      - run: npm ci
-      - run: npm run ci
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Test & Build Binary
+        shell: bash
+        working-directory: ${{ github.action_path }}
+        run: |
+          test -s bun.lock || bun install --lockfile-only
+          bun install --production --frozen-lockfile
+          bun run ci
+          mkdir -p bin
+          bun build --compile --outfile bin/no-response-bin ./src/main.ts
+          chmod a+rx bin/no-response-bin
+      

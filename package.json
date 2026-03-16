@@ -1,6 +1,6 @@
 {
   "name": "no-response-tcely",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A GitHub Action that closes Issues where the author hasn't responded to a request for more information",
   "main": "src/main.ts",

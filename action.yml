@@ -30,15 +30,24 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout
-      uses: actions/checkout@v6
+    - name: Provide files to hash
+      shell: bash
+      run: |
+        set +e
+        shopt -s nullglob
+        dir="$(realpath .remote-action-hashFiles)" &&
+          rm -v -rf "${dir}" &&
+          mkdir -v .action-hash-input &&
+          cd "${{ github.action_path }}" &&
+          cp -v -a -t "${dir}/" src package.json *.lock *-lock.json
+        exit 0
 
     - name: Cache Compiled Binary
       id: cache-binary
       uses: actions/cache@v5
       with:
         path: ${{ github.action_path }}/bin/no-response-bin
-        key: no-response-bin-${{ runner.os }}-${{ hashFiles('src/**/*.ts', '*.lock', '*-lock.json', 'package.json') }}
+        key: no-response-bin-${{ runner.os }}-${{ hashFiles('.remote-action-hashFiles/**') }}
 
     - name: Setup Bun
       if: steps.cache-binary.outputs.cache-hit != 'true'

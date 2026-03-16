@@ -25,16 +25,16 @@
   "author": "lee-dohm",
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.11.1",
-    "@actions/github": "^6.0.0",
-    "scramjet": "^4.36.0"
+    "@actions/core": "^3.0.0",
+    "@actions/github": "^9.0.0",
+    "scramjet": "^4.0.0"
   },
   "devDependencies": {
-    "@octokit/webhooks-types": "^7.6.1",
+    "@octokit/webhooks-types": "^7.0.0",
     "@types/node": "^24.0.0",
-    "@typescript-eslint/parser": "^8.57.0",
-    "eslint": "^9.21.0",
-    "eslint-plugin-github": "^5.1.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^10.0.0",
+    "eslint-plugin-github": "^6.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0"
   }

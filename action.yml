@@ -30,16 +30,15 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
     - name: Cache Compiled Binary
       id: cache-binary
       uses: actions/cache@v5
       with:
         path: ${{ github.action_path }}/bin/no-response-bin
         key: no-response-bin-${{ runner.os }}-${{ hashFiles('src/**/*.ts', '*.lock', '*-lock.json', 'package.json') }}
-
-    - name: Checkout
-      if: steps.cache-binary.outputs.cache-hit != 'true'
-      uses: actions/checkout@v6
 
     - name: Setup Bun
       if: steps.cache-binary.outputs.cache-hit != 'true'

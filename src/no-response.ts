@@ -6,7 +6,6 @@ import * as scramjet from 'scramjet'
 import Config from './config'
 
 /* eslint-disable import/no-unresolved, import/named */
-import { RequestInterface } from '@octokit/types'
 import { IssueCommentEvent, IssuesEvent } from '@octokit/webhooks-types'
 /* eslint-enable */
 
@@ -19,9 +18,9 @@ interface Issue {
 }
 
 interface LabeledEvent {
-  created_at: number
+  created_at: string // GitHub API returns ISO strings
   event: string
-  label: {
+  label?: {
     name: string
   }
 }
@@ -50,7 +49,7 @@ export default class NoResponse {
     const issues = await this.getCloseableIssues()
 
     for (const issue of issues) {
-      this.close({ issue_number: issue.number, ...this.config.repo })
+      await this.close({ issue_number: issue.number, ...this.config.repo })
     }
   }
 
@@ -65,30 +64,29 @@ export default class NoResponse {
     if (payload.action !== 'closed') {
       return
     }
+
     const owner = payload.repository.owner.login
     const repo = payload.repository.name
     const { number } = payload.issue
     const issue = { owner, repo, issue_number: number }
 
     // if the issue closed by the issue author, check if optionalFollowUpLabel is present on the issue and then remove it
-    if (payload.action === 'closed' && payload.issue.user.login === payload.sender.login) {
+    if (payload.issue.user.login === payload.sender.login) {
       const labels = await this.octokit.rest.issues.listLabelsOnIssue(issue)
       const plainLabels = labels.data.map((label: any) => label.name)
 
       if (plainLabels.includes(responseRequiredLabel)) {
+        //await this.octokit.rest.issues.removeLabel({ ...issue, name: responseRequiredLabel })
         await this.octokit.rest.issues.removeLabel({
-          owner,
-          repo,
-          issue_number: number,
+          ...issue,
           name: responseRequiredLabel
         })
       }
 
-      if (plainLabels.includes(optionalFollowUpLabel)) {
+      if (optionalFollowUpLabel && plainLabels.includes(optionalFollowUpLabel)) {
+        //await this.octokit.rest.issues.removeLabel({ ...issue, name: optionalFollowUpLabel })
         await this.octokit.rest.issues.removeLabel({
-          owner,
-          repo,
-          issue_number: number,
+          ...issue,
           name: optionalFollowUpLabel
         })
       }
@@ -112,28 +110,23 @@ export default class NoResponse {
     if (isMarked && issueInfo.data.user?.login === comment.user.login) {
       core.info(`${owner}/${repo}#${number} is being unmarked`)
 
+      //await this.octokit.rest.issues.removeLabel({ ...issue, name: responseRequiredLabel })
       await this.octokit.rest.issues.removeLabel({
-        owner,
-        repo,
-        issue_number: number,
+        ...issue,
         name: responseRequiredLabel
       })
 
       if (optionalFollowUpLabel) {
         await this.ensureLabelExists(optionalFollowUpLabel, optionalFollowUpLabelColor || 'ffffff')
+        //await this.octokit.rest.issues.addLabels({ ...issue, labels: [optionalFollowUpLabel] })
         await this.octokit.rest.issues.addLabels({
-          owner,
-          repo,
-          issue_number: number,
+          ...issue,
           labels: [optionalFollowUpLabel]
         })
       }
 
-      if (
-        issueInfo.data.state === 'closed' &&
-        issueInfo.data.user.login !== issueInfo.data.closed_by?.login
-      ) {
-        this.octokit.rest.issues.update({ owner, repo, issue_number: number, state: 'open' })
+      if (issueInfo.data.state === 'closed' && issueInfo.data.user.login !== issueInfo.data.closed_by?.login) {
+        await this.octokit.rest.issues.update({ ...issue, state: 'open' })
       }
     }
   }
@@ -147,36 +140,28 @@ export default class NoResponse {
       await this.octokit.rest.issues.createComment({ body: closeComment, ...issue })
     }
 
-    await this.octokit.rest.issues.update({ state: 'closed', state_reason: 'inactivity', ...issue })
+    await this.octokit.rest.issues.update({ ...issue, state: 'closed', state_reason: 'not_planned' })
   }
 
   async ensureLabelExists(name: string, color: string): Promise<void> {
     try {
-      await this.octokit.rest.issues.getLabel({
-        name,
-        ...this.config.repo
-      })
-    } catch (e) {
-      this.octokit.rest.issues.createLabel({
-        name,
-        color,
-        ...this.config.repo
-      })
+      await this.octokit.rest.issues.getLabel({ name, ...this.config.repo })
+    } catch {
+      await this.octokit.rest.issues.createLabel({ name, color, ...this.config.repo })
     }
   }
 
   async findLastLabeledEvent(issue: Issue): Promise<LabeledEvent | undefined> {
     const { responseRequiredLabel } = this.config
-    const events: LabeledEvent[] = await this.octokit.paginate(
-      (await this.octokit.rest.issues.listEvents({
-        ...issue,
-        per_page: 100
-      })) as unknown as RequestInterface<object>
-    )
+    
+    const events = await this.octokit.paginate(
+      this.octokit.rest.issues.listEvents,
+      { ...issue, per_page: 100 }
+    ) as unknown as LabeledEvent[]
 
     return events
       .reverse()
-      .find((event) => event.event === 'labeled' && event.label.name === responseRequiredLabel)
+      .find((event) => event.event === 'labeled' && event.label?.name === responseRequiredLabel)
   }
 
   async getCloseableIssues(): Promise<RestIssue[]> {
@@ -185,19 +170,17 @@ export default class NoResponse {
     const q = `repo:${owner}/${repo} is:issue is:open label:"${responseRequiredLabel}"`
     const labeledEarlierThan = this.since(daysUntilClose)
 
-    const issues = await this.octokit.rest.search.issuesAndPullRequests({
-      q,
-      sort: 'updated',
-      order: 'asc',
-      per_page: 30
-    })
+    const issues = await this.octokit.paginate(
+      this.octokit.rest.search.issuesAndPullRequests,
+      { q, sort: 'updated', order: 'asc', per_page: 100 }
+    )
 
     core.debug(`Issues to check for closing:`)
     core.debug(JSON.stringify(issues, null, 2))
 
     const closableIssues = await scramjet
-      .fromArray(issues.data.items)
-      .filter(async (issue) => {
+      .fromArray(issues)
+      .filter(async (issue: any) => {
         const event = await this.findLastLabeledEvent({
           issue_number: issue.number,
           ...this.config.repo
@@ -224,13 +207,13 @@ export default class NoResponse {
 
     core.debug(`Closeable: ${JSON.stringify(closableIssues, null, 2)}`)
 
-    return closableIssues
+    return closableIssues as RestIssue[]
   }
 
   async hasResponseRequiredLabel(issue: Issue): Promise<boolean> {
     const labels = await this.octokit.rest.issues.listLabelsOnIssue({ ...issue })
 
-    return labels.data.map((label: any) => label.name).includes(this.config.responseRequiredLabel)
+    return labels.data.some((label: any) => label.name === this.config.responseRequiredLabel)
   }
 
   async readPayload(): Promise<IssueCommentEvent> {
@@ -246,6 +229,6 @@ export default class NoResponse {
   since(days: number): Date {
     const ttl = days * 24 * 60 * 60 * 1000
 
-    return new Date(new Date().getTime() - ttl)
+    return new Date(Date.now() - ttl)
   }
 }

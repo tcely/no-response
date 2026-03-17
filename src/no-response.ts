@@ -134,38 +134,17 @@ export default class NoResponse {
     const comment = payload.comment
     const issue = { owner, repo, issue_number: number }
 
+    // Ensure cache is populated before deciding on action
     const issueInfo = await this.getIssueInfo(number)
     const isMarked = issueInfo.labels.some((l: any) => l.name === responseRequiredLabel)
 
+    // Only proceed if marked and the commenter is the issue author
     if (isMarked && issueInfo.user?.login === comment.user.login) {
       core.info(`${owner}/${repo}#${number} is being unmarked`)
 
-      const tasks: Promise<any>[] = [
-        this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: responseRequiredLabel
-        })
-      ]
-
-      if (optionalFollowUpLabel) {
-        tasks.push(
-          this.ensureLabelExists(
-            optionalFollowUpLabel,
-            optionalFollowUpLabelColor || 'ffffff'
-          ).then(() =>
-            this.octokit.rest.issues.addLabels({
-              ...issue,
-              labels: [optionalFollowUpLabel]
-            })
-          )
-        )
-      }
-
-      await Promise.all(tasks)
-
       if (issueInfo.state === 'closed' && issueInfo.user.login !== issueInfo.closed_by?.login) {
-        // Re-open if the closer wasn't the author
-        await this.octokit.rest.issues.update({ ...issue, state: 'open' })
+        // Use the new shared helper for the full sequence
+        await this.reopenAndUnmark(number)
       }
     }
   }

@@ -65,12 +65,14 @@ export default class NoResponse {
     for (let i = 0; i < issues.length; i += batchSize) {
       const currentBatch = issues.slice(i, i + batchSize)
 
-      await Promise.all(currentBatch.map(issue =>
-        this.close({
-          issue_number: issue.number,
-          ...this.config.repo
-        })
-      ))
+      await Promise.all(
+        currentBatch.map((issue) =>
+          this.close({
+            issue_number: issue.number,
+            ...this.config.repo
+          })
+        )
+      )
     }
 
     core.info(`Sweep complete. Processed ${issues.length} issues.`)
@@ -140,7 +142,10 @@ export default class NoResponse {
 
       if (optionalFollowUpLabel) {
         tasks.push(
-          this.ensureLabelExists(optionalFollowUpLabel, optionalFollowUpLabelColor || 'ffffff').then(() =>
+          this.ensureLabelExists(
+            optionalFollowUpLabel,
+            optionalFollowUpLabelColor || 'ffffff'
+          ).then(() =>
             this.octokit.rest.issues.addLabels({
               ...issue,
               labels: [optionalFollowUpLabel]
@@ -151,10 +156,7 @@ export default class NoResponse {
 
       await Promise.all(tasks)
 
-      if (
-        issueInfo.state === 'closed' &&
-        issueInfo.user.login !== issueInfo.closed_by?.login
-      ) {
+      if (issueInfo.state === 'closed' && issueInfo.user.login !== issueInfo.closed_by?.login) {
         // Re-open if the closer wasn't the author
         await this.octokit.rest.issues.update({ ...issue, state: 'open' })
       }
@@ -212,18 +214,19 @@ export default class NoResponse {
     })) as unknown as TimelineEvent[]
 
     // Look for the 'closed' event to find who closed it
-    const closedEvent = events.findLast(e => e.event === 'closed');
+    const closedEvent = events.findLast((e) => e.event === 'closed')
     if (closedEvent) {
       // Manually update your issueCache with the closer info to save a GET later
-      const cached = this.issueCache.get(issue.issue_number) || {};
+      const cached = this.issueCache.get(issue.issue_number) || {}
       this.issueCache.set(issue.issue_number, {
         ...cached,
         closed_by: closedEvent.actor
-      });
+      })
     }
 
-    return events
-      .findLast((event) => event.event === 'labeled' && event.label?.name === responseRequiredLabel)
+    return events.findLast(
+      (event) => event.event === 'labeled' && event.label?.name === responseRequiredLabel
+    )
   }
 
   async getCloseableIssues(): Promise<RestIssue[]> {
@@ -280,7 +283,7 @@ export default class NoResponse {
       }
 
       const currentBatch = tasks.slice(i, i + batchSize)
-      const results = await Promise.all(currentBatch.map(task => task()))
+      const results = await Promise.all(currentBatch.map((task) => task()))
 
       for (const issue of results) {
         if (issue) {

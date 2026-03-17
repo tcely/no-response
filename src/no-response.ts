@@ -59,6 +59,13 @@ export default class NoResponse {
       this.config.responseRequiredColor
     )
 
+    // Identify and process reopens first
+    const toReopen = await this.getReopenableIssues()
+    for (const issue of toReopen) {
+      await this.reopenAndUnmark(issue.number)
+    }
+
+    // Identify and process closures
     const issues = await this.getCloseableIssues()
 
     const batchSize = 10
@@ -75,7 +82,7 @@ export default class NoResponse {
       )
     }
 
-    core.info(`Sweep complete. Processed ${issues.length} issues.`)
+    core.info(`Sweep complete. Reopened ${toReopen.length} and closed ${issues.length} issues.`)
   }
 
   async removeLabels(): Promise<void> {

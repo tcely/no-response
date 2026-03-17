@@ -300,12 +300,6 @@ export default class NoResponse {
     return closableIssues as RestIssue[]
   }
 
-  async hasResponseRequiredLabel(issue: Issue): Promise<boolean> {
-    const labels = await this.octokit.rest.issues.listLabelsOnIssue({ ...issue })
-
-    return labels.data.some((label: any) => label.name === this.config.responseRequiredLabel)
-  }
-
   async readPayload(): Promise<IssueCommentEvent> {
     if (!process.env.GITHUB_EVENT_PATH) {
       throw new Error('GITHUB_EVENT_PATH is not defined')

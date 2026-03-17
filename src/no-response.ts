@@ -367,32 +367,34 @@ export default class NoResponse {
     core.info(`Reopening and unmarking #${issueNumber}`)
 
     // Reopen first, THEN handle labels only if the reopen succeeds
-    await this.octokit.rest.issues.update({
-      ...issue,
-      state: 'open'
-    }).then(async () => {
-      const tasks: Promise<any>[] = [
-        this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: responseRequiredLabel
-        })
-      ]
+    await this.octokit.rest.issues
+      .update({
+        ...issue,
+        state: 'open'
+      })
+      .then(async () => {
+        const tasks: Promise<any>[] = [
+          this.octokit.rest.issues.removeLabel({
+            ...issue,
+            name: responseRequiredLabel
+          })
+        ]
 
-      if (optionalFollowUpLabel) {
-        tasks.push(
-          this.ensureLabelExists(
-            optionalFollowUpLabel,
-            optionalFollowUpLabelColor || 'ffffff'
-          ).then(() =>
-            this.octokit.rest.issues.addLabels({
-              ...issue,
-              labels: [optionalFollowUpLabel]
-            })
+        if (optionalFollowUpLabel) {
+          tasks.push(
+            this.ensureLabelExists(
+              optionalFollowUpLabel,
+              optionalFollowUpLabelColor || 'ffffff'
+            ).then(() =>
+              this.octokit.rest.issues.addLabels({
+                ...issue,
+                labels: [optionalFollowUpLabel]
+              })
+            )
           )
-        )
-      }
+        }
 
-      return Promise.all(tasks)
-    })
+        return Promise.all(tasks)
+      })
   }
 }

@@ -107,18 +107,31 @@ export default class NoResponse {
       const labels = await this.octokit.rest.issues.listLabelsOnIssue(issue)
       const plainLabels = labels.data.map((label: any) => label.name)
 
+      const tasks: Promise<any>[] = []
+
       if (plainLabels.includes(responseRequiredLabel)) {
-        await this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: responseRequiredLabel
-        })
+        tasks.push(
+          this.octokit.rest.issues.removeLabel({
+            ...issue,
+            name: responseRequiredLabel
+          })
+        )
       }
 
       if (optionalFollowUpLabel && plainLabels.includes(optionalFollowUpLabel)) {
-        await this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: optionalFollowUpLabel
-        })
+        tasks.push(
+          this.octokit.rest.issues.removeLabel({
+            ...issue,
+            name: optionalFollowUpLabel
+          })
+        )
+      }
+
+      if (tasks.length > 0) {
+        // Clear the cache so future lookups see the labels have been removed
+        this.issueCache.delete(number)
+
+        await Promise.all(tasks)
       }
     }
   }
@@ -142,9 +155,61 @@ export default class NoResponse {
     if (isMarked && issueInfo.user?.login === comment.user.login) {
       core.info(`${owner}/${repo}#${number} is being unmarked`)
 
+      const tasks: Promise<any>[] = []
+
       if (issueInfo.state === 'closed' && issueInfo.user.login !== issueInfo.closed_by?.login) {
         // Use the new shared helper for the full sequence
         await this.reopenAndUnmark(number)
+      } else if (issueInfo.state === 'closed') {
+        // the author closed it, remove both labels
+        tasks.push(
+          this.octokit.rest.issues.removeLabel({
+            ...issue,
+            name: responseRequiredLabel
+          })
+        )
+
+        if (optionalFollowUpLabel) {
+          const isFollowUp = issueInfo.labels.some((l: any) => l.name === optionalFollowUpLabel)
+          if (isFollowUp) {
+            tasks.push(
+              this.octokit.rest.issues.removeLabel({
+                ...issue,
+                name: optionalFollowUpLabel
+              })
+            )
+          }
+        }
+      } else if (issueInfo.state !== 'closed') {
+        // it's open already, remove the no-response label
+        // add the optional attention label
+        tasks.push(
+          this.octokit.rest.issues.removeLabel({
+            ...issue,
+            name: responseRequiredLabel
+          })
+        )
+
+        if (optionalFollowUpLabel) {
+          tasks.push(
+            this.ensureLabelExists(
+              optionalFollowUpLabel,
+              optionalFollowUpLabelColor || 'ffffff'
+            ).then(() =>
+              this.octokit.rest.issues.addLabels({
+                ...issue,
+                labels: [optionalFollowUpLabel]
+              })
+            )
+          )
+        }
+      }
+
+      if (tasks.length > 0) {
+        // Clear the cache so future lookups see the labels have changed
+        this.issueCache.delete(number)
+
+        await Promise.all(tasks)
       }
     }
   }

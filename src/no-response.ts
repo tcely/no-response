@@ -369,4 +369,44 @@ export default class NoResponse {
 
     return new Date(Date.now() - ttl)
   }
+
+  private async reopenAndUnmark(issueNumber: number): Promise<void> {
+    const { responseRequiredLabel, optionalFollowUpLabel, optionalFollowUpLabelColor } = this.config
+    const issue = { ...this.config.repo, issue_number: issueNumber }
+
+    // Pull data from cache and clear it immediately
+    const cached = this.issueCache.get(issueNumber)
+    this.issueCache.delete(issueNumber)
+
+    core.info(`Reopening and unmarking #${issueNumber}`)
+
+    // Reopen first, THEN handle labels only if the reopen succeeds
+    await this.octokit.rest.issues.update({
+      ...issue,
+      state: 'open'
+    }).then(async () => {
+      const tasks: Promise<any>[] = [
+        this.octokit.rest.issues.removeLabel({
+          ...issue,
+          name: responseRequiredLabel
+        })
+      ]
+
+      if (optionalFollowUpLabel) {
+        tasks.push(
+          this.ensureLabelExists(
+            optionalFollowUpLabel,
+            optionalFollowUpLabelColor || 'ffffff'
+          ).then(() =>
+            this.octokit.rest.issues.addLabels({
+              ...issue,
+              labels: [optionalFollowUpLabel]
+            })
+          )
+        )
+      }
+
+      return Promise.all(tasks)
+    })
+  }
 }

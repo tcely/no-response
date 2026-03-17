@@ -23,6 +23,9 @@ inputs:
   optionalFollowUpLabelColor:
     description: Color for the `optionalFollowUpLabel`
     default: ffffff
+  maxIssuesPerRun:
+    description: Number of Issues to close per workflow run
+    default: 50
   token:
     description: Token to access the GitHub API
     required: true
@@ -76,6 +79,7 @@ runs:
         INPUT_RESPONSEREQUIREDLABEL: ${{ inputs.responseRequiredLabel }}
         INPUT_OPTIONALFOLLOWUPLABEL: ${{ inputs.optionalFollowUpLabel }}
         INPUT_OPTIONALFOLLOWUPLABELCOLOR: ${{ inputs.optionalFollowUpLabelColor }}
+        INPUT_MAXISSUESPERRUN: ${{ inputs.maxIssuesPerRun }}
       run: ./bin/no-response-bin
 
     - name: Handle Failure

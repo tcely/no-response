@@ -39,6 +39,8 @@ export default class Config {
   /** An optional label to add when the `responseRequiredLabel` gets removed due to issue author's reply */
   optionalFollowUpLabelColor?: string
 
+  maxIssuesPerRun: number
+
   /** GitHub token to use when performing API operations. */
   token: string
 
@@ -62,6 +64,8 @@ export default class Config {
       core.getInput('responseRequiredLabel'),
       'more-information-needed'
     )
+
+    this.maxIssuesPerRun = parseInt(this.valueOrDefault(core.getInput('maxIssuesPerRun'), '50'))
 
     this.token = core.getInput('token', { required: true })
 

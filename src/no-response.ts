@@ -229,6 +229,36 @@ export default class NoResponse {
     )
   }
 
+  async getReopenableIssues(): Promise<RestIssue[]> {
+    const { owner, repo } = this.config.repo
+    const { responseRequiredLabel } = this.config
+    const q = `repo:${owner}/${repo} is:issue is:closed label:"${responseRequiredLabel}"`
+
+    const issues = await this.octokit.paginate(this.octokit.rest.search.issuesAndPullRequests, {
+      q,
+      sort: 'updated',
+      order: 'desc',
+      per_page: 100
+    })
+
+    const reopenableIssues: RestIssue[] = []
+
+    for (const issue of issues) {
+      // Seed the cache with the search result
+      this.issueCache.set(issue.number, issue)
+
+      // getIssueInfo handles the potential fetch for closed_by info
+      const issueInfo = await this.getIssueInfo(issue.number)
+
+      // Reopen logic: if the closer was not the issue author
+      if (issueInfo.user?.login !== issueInfo.closed_by?.login) {
+        reopenableIssues.push(issue as RestIssue)
+      }
+    }
+
+    return reopenableIssues
+  }
+
   async getCloseableIssues(): Promise<RestIssue[]> {
     const { owner, repo } = this.config.repo
     const { daysUntilClose, maxIssuesPerRun, responseRequiredLabel } = this.config

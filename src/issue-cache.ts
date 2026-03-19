@@ -45,13 +45,13 @@ export class IssueCache {
    */
   async fetch(repo: Repository, number: number): Promise<IssueDetails> {
     const cached = await this.get(repo, number)
-    
+
     if (undefined !== cached && undefined !== cached.labels) {
       return cached
     }
 
     const details = await this.client.fetchIssueByNumber(repo, number)
-    
+
     await this.set(repo, details)
     return details
   }

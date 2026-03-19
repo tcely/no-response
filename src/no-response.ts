@@ -7,11 +7,11 @@ import { IssueCommentEvent, IssuesEvent } from '@octokit/webhooks-types'
 import Config from './config'
 import { GitHubApiClient } from './gh-api-client'
 import { IssueCache } from './issue-cache'
-import { 
-  isLabeled, 
-  checkClosedByAuthor, 
+import {
+  isLabeled,
+  checkClosedByAuthor,
   getExpiryDate,
-  isTargetLabeledEvent 
+  isTargetLabeledEvent
 } from './logic-helpers'
 import { RepoMetadataCache } from './repo-metadata-cache'
 import { Repository, Label, Issue, IssueDetails } from './types'
@@ -20,7 +20,7 @@ export default class NoResponse {
   private client: GitHubApiClient
   private repoMetadata: RepoMetadataCache
   private issueCache: IssueCache
-  
+
   private repository!: Repository
   private responseRequiredLabel!: Label
   private optionalFollowUpLabel?: Label
@@ -34,7 +34,7 @@ export default class NoResponse {
   private async initializeMetadata(): Promise<void> {
     if (this.repository && this.responseRequiredLabel) return
     this.repository = await this.repoMetadata.getInitializedRepository(this.config.repo)
-    
+
     this.responseRequiredLabel = {
       name: this.config.responseRequiredLabel,
       repo: this.repository,
@@ -65,7 +65,7 @@ export default class NoResponse {
     const batchSize = 10
     for (let i = 0; i < toClose.length; i += batchSize) {
       const batch = toClose.slice(i, i + batchSize)
-      await Promise.all(batch.map(details => this.close(details.number)))
+      await Promise.all(batch.map((details) => this.close(details.number)))
     }
 
     core.info(`Sweep complete. Reopened ${toReopen.length} and closed ${toClose.length} issues.`)
@@ -74,12 +74,14 @@ export default class NoResponse {
   async handleLabeled(): Promise<void> {
     await this.initializeMetadata()
     const payload = github.context.payload as IssuesEvent
-    
+
     if (payload.label?.name !== this.responseRequiredLabel.name) return
 
     const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
-    
-    core.info(`Target label matched. Assigning #${issueDetails.number} to author: ${issueDetails.user.login}`)
+
+    core.info(
+      `Target label matched. Assigning #${issueDetails.number} to author: ${issueDetails.user.login}`
+    )
     await this.client.addAssignees(issueDetails, [issueDetails.user.login])
   }
 
@@ -93,17 +95,19 @@ export default class NoResponse {
 
     const isAuthorClosed = checkClosedByAuthor(issueDetails)
 
-    /* 
+    /*
      * CASE 1: Closed by someone else (Bot/Maintainer).
      * Reopen immediately on author response.
      */
     if (!isAuthorClosed && 'closed' === issueDetails.state) {
-      core.info(`Author responded to closed issue ${this.repository.owner}/${this.repository.name}#${issueDetails.number}. Reopening.`)
+      core.info(
+        `Author responded to closed issue ${this.repository.owner}/${this.repository.name}#${issueDetails.number}. Reopening.`
+      )
       await this.reopenAndAdjustLabels(issueDetails.number)
       return
     }
 
-    /* 
+    /*
      * CASE 2: Closed by the author themselves.
      * Reopen only if the comment happened after the grace period.
      */
@@ -113,7 +117,9 @@ export default class NoResponse {
       const commentedAt = new Date(payload.comment.created_at).getTime()
 
       if (gracePeriodMs < commentedAt - closedAt) {
-        core.info(`Author follow-up on self-closed ${this.repository.owner}/${this.repository.name}#${issueDetails.number} after grace period. Reopening.`)
+        core.info(
+          `Author follow-up on self-closed ${this.repository.owner}/${this.repository.name}#${issueDetails.number} after grace period. Reopening.`
+        )
         await this.reopenAndAdjustLabels(issueDetails.number)
       } else {
         await this.clearWorkflowLabels(issueDetails)
@@ -121,7 +127,7 @@ export default class NoResponse {
       return
     }
 
-    /* 
+    /*
      * CASE 3: Issue is OPEN.
      */
     if ('open' === issueDetails.state) {
@@ -143,17 +149,30 @@ export default class NoResponse {
 
   private async getReopenableIssues(): Promise<IssueDetails[]> {
     const q = `repo:${this.repository.owner}/${this.repository.name} is:issue is:closed label:"${this.responseRequiredLabel.name}"`
-    const results = await this.client.octokit.paginate(this.client.octokit.rest.search.issuesAndPullRequests, { q, per_page: 100 })
+    const results = await this.client.octokit.paginate(
+      this.client.octokit.rest.search.issuesAndPullRequests,
+      { q, per_page: 100 }
+    )
 
     const reopenable: IssueDetails[] = []
     for (const raw of results) {
-      const issue: Issue = { number: raw.number, repo: this.repository, state: raw.state as 'open' | 'closed', user: { login: raw.user!.login } }
+      const issue: Issue = {
+        number: raw.number,
+        repo: this.repository,
+        state: raw.state as 'open' | 'closed',
+        user: { login: raw.user!.login }
+      }
       const details = await this.issueCache.fetchDetails(issue)
 
       if (!checkClosedByAuthor(details)) {
         const timeline = await this.client.fetchTimeline(details)
         const closedAt = details.closed_at!.getTime()
-        const authorResponded = timeline.some(e => 'commented' === e.event && e.actor.login === details.user.login && e.created_at.getTime() > closedAt)
+        const authorResponded = timeline.some(
+          (e) =>
+            'commented' === e.event &&
+            details.user.login === e.actor.login &&
+            closedAt < e.created_at.getTime()
+        )
         if (authorResponded) reopenable.push(details)
       }
     }
@@ -162,7 +181,10 @@ export default class NoResponse {
 
   private async getCloseableIssues(): Promise<IssueDetails[]> {
     const q = `repo:${this.repository.owner}/${this.repository.name} is:issue is:open label:"${this.responseRequiredLabel.name}"`
-    const results = await this.client.octokit.paginate(this.client.octokit.rest.search.issuesAndPullRequests, { q, per_page: 100 })
+    const results = await this.client.octokit.paginate(
+      this.client.octokit.rest.search.issuesAndPullRequests,
+      { q, per_page: 100 }
+    )
 
     const closeable: IssueDetails[] = []
     for (const raw of results) {
@@ -179,15 +201,21 @@ export default class NoResponse {
     const timeline = await this.client.fetchTimeline(details)
 
     const labeledEvents = timeline
-      .filter(e => isTargetLabeledEvent(e, this.responseRequiredLabel))
+      .filter((e) => isTargetLabeledEvent(e, this.responseRequiredLabel))
       .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
 
     if (0 === labeledEvents.length) return false
     const lastLabeled = labeledEvents[0]
 
-    if (lastLabeled.created_at.getTime() > getExpiryDate(this.config.daysUntilClose).getTime()) return false
+    if (lastLabeled.created_at.getTime() > getExpiryDate(this.config.daysUntilClose).getTime())
+      return false
 
-    return !timeline.some(e => 'commented' === e.event && e.actor.login === details.user.login && e.created_at.getTime() > lastLabeled.created_at.getTime())
+    return !timeline.some(
+      (e) =>
+        'commented' === e.event &&
+        details.user.login === e.actor.login &&
+        e.created_at.getTime() > lastLabeled.created_at.getTime()
+    )
   }
 
   private async close(number: number): Promise<void> {
@@ -207,8 +235,10 @@ export default class NoResponse {
 
   private async clearWorkflowLabels(issue: IssueDetails): Promise<void> {
     const labelsToRemove = []
-    if (isLabeled(issue, this.responseRequiredLabel)) labelsToRemove.push(this.responseRequiredLabel)
-    if (this.optionalFollowUpLabel && isLabeled(issue, this.optionalFollowUpLabel)) labelsToRemove.push(this.optionalFollowUpLabel)
+    if (isLabeled(issue, this.responseRequiredLabel))
+      labelsToRemove.push(this.responseRequiredLabel)
+    if (this.optionalFollowUpLabel && isLabeled(issue, this.optionalFollowUpLabel))
+      labelsToRemove.push(this.optionalFollowUpLabel)
 
     await this.client.removeLabels(issue, labelsToRemove)
   }

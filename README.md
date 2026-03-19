@@ -111,18 +111,16 @@ jobs:
 
 See [`action.yml`](action.yml) for full defaults.
 
-
-
-| Input                        | Description                                          | Default                   |
-| :--------------------------- | :--------------------------------------------------- | :------------------------ |
-| `token`                      | **Required**. GitHub token (e.g. `${{ token }}`)     | N/A                       |
-| `daysUntilClose`             | Days to wait before closing an inactive issue.       | `14`                      |
-| `responseRequiredLabel`      | Label indicating a response is needed.               | `more-information-needed` |
-| `responseRequiredColor`      | Hex color for the response label.                    | `ffffff`                  |
-| `optionalFollowUpLabel`      | Label to add after the author responds.              | `undefined`               |
-| `optionalFollowUpLabelColor` | Hex color for the follow-up label.                   | `ffffff`                  |
-| `maxIssuesPerRun`            | Maximum number of issues to close per scheduled run. | `50`                      |
-| `closeComment`               | Optional comment on close. Set to `false` to disable.| (Standard message)[^default-comment]        |
+| Input                        | Description                                           | Default                              |
+| :--------------------------- | :---------------------------------------------------- | :----------------------------------- |
+| `token`                      | **Required**. GitHub token (e.g. `${{ token }}`)      | N/A                                  |
+| `daysUntilClose`             | Days to wait before closing an inactive issue.        | `14`                                 |
+| `responseRequiredLabel`      | Label indicating a response is needed.                | `more-information-needed`            |
+| `responseRequiredColor`      | Hex color for the response label.                     | `ffffff`                             |
+| `optionalFollowUpLabel`      | Label to add after the author responds.               | `undefined`                          |
+| `optionalFollowUpLabelColor` | Hex color for the follow-up label.                    | `ffffff`                             |
+| `maxIssuesPerRun`            | Maximum number of issues to close per scheduled run.  | `50`                                 |
+| `closeComment`               | Optional comment on close. Set to `false` to disable. | (Standard message)[^default-comment] |
 
 [^default-comment]: Defined in [src/config.ts](src/config.ts):
     > This issue has been automatically closed because there has been no response to our request for more information from the original author.

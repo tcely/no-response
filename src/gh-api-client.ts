@@ -1,12 +1,7 @@
 // src/gh-api-client.ts
 
 import * as github from '@actions/github'
-import {
-  mapRestIssue,
-  mapTimelineEvent,
-  toRestIssue,
-  toRestLabel
-} from './gh-api-helpers'
+import { mapRestIssue, mapTimelineEvent, toRestIssue, toRestLabel } from './gh-api-helpers'
 import {
   Issue,
   IssueDetails,
@@ -25,7 +20,7 @@ export class GitHubApiClient {
   }
 
   private repoParams(repo: Repository) {
-    return { owner: repo.owner, repo: repo.name };
+    return { owner: repo.owner, repo: repo.name }
   }
 
   /**
@@ -62,7 +57,7 @@ export class GitHubApiClient {
       per_page: 100
     })
 
-    return data.map(l => ({
+    return data.map((l) => ({
       name: l.name,
       repo,
       color: l.color,
@@ -92,10 +87,10 @@ export class GitHubApiClient {
    * Fetches all timeline events for an issue using its repository and number (RestIssue).
    */
   async fetchTimelineByNumber(issue: RestIssue): Promise<TimelineEvent[]> {
-    const events = await this.octokit.paginate(
-      this.octokit.rest.issues.listEventsForTimeline,
-      { ...issue, per_page: 100 }
-    )
+    const events = await this.octokit.paginate(this.octokit.rest.issues.listEventsForTimeline, {
+      ...issue,
+      per_page: 100
+    })
     return events.map(mapTimelineEvent)
   }
 
@@ -154,7 +149,7 @@ export class GitHubApiClient {
    * Returns the updated IssueDetails.
    */
   async updateIssueStateByNumber(
-    issue: RestIssue, 
+    issue: RestIssue,
     state: 'open' | 'closed',
     state_reason?: 'completed' | 'not_planned' | 'reopened'
   ): Promise<IssueDetails> {
@@ -178,7 +173,6 @@ export class GitHubApiClient {
     return await this.updateIssueStateByNumber(toRestIssue(issue), issue.state, state_reason)
   }
 
-
   /**
    * Adds specified labels to an issue and returns the full updated list of labels.
    */
@@ -186,14 +180,14 @@ export class GitHubApiClient {
     if (1 > labelsToAdd.length) return issue.labels
 
     const restIssue = toRestIssue(issue)
-    const newNames = labelsToAdd.map(l => l.name)
+    const newNames = labelsToAdd.map((l) => l.name)
 
     const { data } = await this.octokit.rest.issues.addLabels({
       ...restIssue,
       labels: newNames
     })
 
-    return data.map(l => ({
+    return data.map((l) => ({
       name: l.name,
       repo: issue.repo,
       color: l.color || 'ffffff',
@@ -210,10 +204,10 @@ export class GitHubApiClient {
     if (1 > labelsToRemove.length) return issue.labels
 
     const restIssue = toRestIssue(issue)
-    const toRemoveNames = new Set(labelsToRemove.map(l => l.name))
+    const toRemoveNames = new Set(labelsToRemove.map((l) => l.name))
 
-    const remainingLabels = issue.labels.filter(l => !toRemoveNames.has(l.name))
-    const remainingNames = remainingLabels.map(l => l.name)
+    const remainingLabels = issue.labels.filter((l) => !toRemoveNames.has(l.name))
+    const remainingNames = remainingLabels.map((l) => l.name)
 
     await this.octokit.rest.issues.setLabels({
       ...restIssue,

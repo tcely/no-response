@@ -4,10 +4,10 @@
  * A standalone, flat representation of a GitHub Repository.
  */
 export interface Repository {
-  name: string      // The repo name (e.g. "my-repo")
-  owner: string     // The owner (e.g. "my-org")
-  id?: number       // Numeric repo ID
-  node_id?: string  // Global immutable ID
+  name: string // The repo name (e.g. "my-repo")
+  owner: string // The owner (e.g. "my-org")
+  id?: number // Numeric repo ID
+  node_id?: string // Global immutable ID
   owner_id?: number // Numeric owner ID
 }
 

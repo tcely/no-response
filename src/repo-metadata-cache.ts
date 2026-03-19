@@ -7,7 +7,7 @@ import { GitHubApiClient } from './gh-api-client'
 export class RepoMetadataCache {
   // Bridge: "owner/name" -> node_id (Used only for the first lookup)
   private idBridge = new Map<string, string>()
-  
+
   // Data: node_id -> Label[]
   private labelsCache = new Map<string, Label[]>()
 
@@ -27,7 +27,10 @@ export class RepoMetadataCache {
    * Performs exactly TWO parallel API calls to fully hydrate a repository.
    * This is the single source of truth for repository synchronization.
    */
-  private async syncRepoMetadata(repo: { owner: string; name: string }): Promise<{ repo: Repository; labels: Label[] }> {
+  private async syncRepoMetadata(repo: {
+    owner: string
+    name: string
+  }): Promise<{ repo: Repository; labels: Label[] }> {
     const bridgeKey = this.makeBridgeKey(repo)
     core.debug(`Syncing all metadata for ${bridgeKey}`)
 
@@ -95,7 +98,7 @@ export class RepoMetadataCache {
   async createLabel(label: Label): Promise<Label[]> {
     const repository = await this.getInitializedRepository(label.repo)
     const currentLabels = await this.getLabels(repository)
-    if (currentLabels.some(l => l.name === label.name)) {
+    if (currentLabels.some((l) => l.name === label.name)) {
       return currentLabels
     }
 
@@ -108,7 +111,7 @@ export class RepoMetadataCache {
       return await this.getLabels(repository)
     } catch (error: any) {
       // If label exists on server but not in our cache, re-sync to get it.
-      if (error.errors?.some((e: any) => "already_exists" === e.code)) {
+      if (error.errors?.some((e: any) => 'already_exists' === e.code)) {
         const { labels } = await this.syncRepoMetadata(repository)
         return labels
       }

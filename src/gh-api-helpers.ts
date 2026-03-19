@@ -72,6 +72,8 @@ export function hasUser<T extends Issue>(issue: T): issue is T & { user: { login
 /**
  * Type guard to ensure a closed issue has a closer login.
  */
-export function isClosedIssue(issue: any): issue is { state: 'closed'; closed_by: { login: string } } {
+export function isClosedIssue(
+  issue: any
+): issue is { state: 'closed'; closed_by: { login: string } } {
   return issue.state === 'closed' && !!issue.closed_by?.login
 }

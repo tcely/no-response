@@ -9,4 +9,4 @@ lib/
 node_modules/
 
 # Bun specific
-bun.lockb 
+bun.lockb

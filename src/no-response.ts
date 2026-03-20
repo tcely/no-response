@@ -138,6 +138,34 @@ export default class NoResponse {
     await this.client.addAssignees(issueDetails, [issueDetails.user.login])
   }
 
+  /**
+   * Author comment handler (issue_comment.created)
+   *
+   * Intended behavior:
+   * - Re-open (or keep open) any issue where the *issue author* comments,
+   *   with the ONLY exception:
+   *     - if the author closed the issue themselves within the grace period
+   *       (default: 15 minutes), do not reopen (treat as a "thanks"/wrap-up).
+   *
+   * Rationale (IMPORTANT):
+   * - This action is intentionally allowed to reopen issues even when
+   *   `responseRequiredLabel` is not currently present. This is a deliberate
+   *   safety-net behavior for cases where the author cannot reopen the issue
+   *   themselves (email replies, permission restrictions) or when event-driven
+   *   processing is missed and the scheduled sweep later catches it.
+   *
+   * Post-conditions (when reopening OR already open):
+   * - remove `responseRequiredLabel` (if present),
+   * - unassign the author (if assigned via this workflow),
+   * - then (if configured) add `optionalFollowUpLabel`.
+   *
+   * Future note:
+   * - We may introduce an input to restrict reopen behavior to only issues that
+   *   previously participated in this workflow (e.g., only if
+   *   `responseRequiredLabel` was applied at some point). Do not “fix” this
+   *   by adding an `isLabeled(...responseRequiredLabel)` guard without that
+   *   explicit product decision.
+   */
   async handleAuthorCommented(): Promise<void> {
     await this.initializeMetadata()
     const payload = github.context.payload as IssueCommentEvent
@@ -302,6 +330,18 @@ export default class NoResponse {
     return await this.client.removeAssignees(issue, [issue.user.login])
   }
 
+  /**
+   * Normalizes an issue after author engagement:
+   * - If `responseRequiredLabel` is present, remove it and unassign the author.
+   * - If `optionalFollowUpLabel` is configured, add it.
+   *
+   * Note:
+   * - Today, optional follow-up can be applied even if the required label was
+   *   not present. This aligns with the “assist users who can’t reopen” default.
+   * - If we add a future config input to require prior workflow participation,
+   *   this is the place to conditionally apply the follow-up label based on
+   *   prior presence/history of `responseRequiredLabel`.
+   */
   private async transitionToFollowUp(issue: IssueDetails): Promise<void> {
     if (isLabeled(issue, this.responseRequiredLabel)) {
       await this.client.removeLabels(issue, [this.responseRequiredLabel])

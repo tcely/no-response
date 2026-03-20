@@ -172,9 +172,10 @@ export default class NoResponse {
       const issueDetails = await this.issueCache.fetchDetails(issue)
       const { details, timeline } = await this.issueCache.ensureClosureDetails(issueDetails)
 
-      if (!checkClosedByAuthor(details) && timeline) {
+      if (!checkClosedByAuthor(details)) {
         const closedAt = details.closed_at!.getTime()
-        const authorResponded = timeline.some(
+        const events = timeline ?? (await this.client.fetchTimeline(details))
+        const authorResponded = events.some(
           (e) =>
             'commented' === e.event &&
             details.user.login === e.actor.login &&

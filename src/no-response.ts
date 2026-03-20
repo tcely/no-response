@@ -18,7 +18,8 @@ import { RepoMetadataCache } from './repo-metadata-cache'
 import { Repository, Label, Issue, IssueDetails } from './types'
 
 export default class NoResponse {
-  private gracePeriodMs: number
+  private gracePeriodMs = 1000 * 60 * 15 // minutes
+
   private client: GitHubApiClient
   private repoMetadata: RepoMetadataCache
   private issueCache: IssueCache
@@ -57,25 +58,70 @@ export default class NoResponse {
     }
   }
 
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
   async sweep(): Promise<void> {
     core.debug('Starting sweep')
     await this.initializeMetadata()
 
     await this.repoMetadata.createLabel(this.responseRequiredLabel)
 
+    const writeBatchSize = 10
+    const interBatchDelayMs = 1000 * 2 // seconds (secondary rate-limit protection)
+    const stats = {
+      closed: { ok: 0, failed: 0 },
+      reopened: { ok: 0, failed: 0 }
+    }
+
+    // 1) Reopen pass (resilient)
     const toReopen = await this.getReopenableIssues()
-    for (const details of toReopen) {
-      await this.reopenAndAdjustLabels(details.number)
+
+    for (let i = 0; i < toReopen.length; i += writeBatchSize) {
+      const counts = await this.runWriteBatch(
+        toReopen.slice(i, i + writeBatchSize),
+        async (details) => {
+          await this.reopenAndAdjustLabels(details.number)
+        },
+        (details) => ({ context: 'reopen', issueNumber: details.number })
+      )
+
+      stats.reopened.ok += counts.ok
+      stats.reopened.failed += counts.failed
+
+      // delay between *write* batches
+      if (i + writeBatchSize < toReopen.length) {
+        await this.sleep(interBatchDelayMs)
+      }
     }
 
+    // Optional extra spacing between reopen and close phases
+    if (0 < toReopen.length) await this.sleep(interBatchDelayMs)
+
+    // 2) Close pass (resilient + maxIssuesPerRun already enforced inside getCloseableIssues)
     const toClose = await this.getCloseableIssues()
-    const batchSize = 10
-    for (let i = 0; i < toClose.length; i += batchSize) {
-      const batch = toClose.slice(i, i + batchSize)
-      await Promise.all(batch.map((details) => this.close(details.number)))
+
+    for (let i = 0; i < toClose.length; i += writeBatchSize) {
+      const counts = await this.runWriteBatch(
+        toClose.slice(i, i + writeBatchSize),
+        async (details) => {
+          await this.close(details.number)
+        },
+        (details) => ({ context: 'close', issueNumber: details.number })
+      )
+
+      stats.closed.ok += counts.ok
+      stats.closed.failed += counts.failed
+
+      if (i + writeBatchSize < toClose.length) {
+        await this.sleep(interBatchDelayMs)
+      }
     }
 
-    core.info(`Sweep complete. Reopened ${toReopen.length} and closed ${toClose.length} issues.`)
+    core.info(
+      `Sweep complete. Reopen: ok=${stats.reopened.ok}, failed=${stats.reopened.failed}. Close: ok=${stats.closed.ok}, failed=${stats.closed.failed}.`
+    )
   }
 
   async handleLabeled(): Promise<void> {
@@ -266,5 +312,73 @@ export default class NoResponse {
       await this.repoMetadata.createLabel(this.optionalFollowUpLabel)
       await this.client.addLabels(issue, [this.optionalFollowUpLabel])
     }
+  }
+
+  private formatOctokitError(error: any) {
+    // Octokit errors often carry: status, message, request, response.data
+    const status = error?.status
+    const message = error?.message || String(error)
+
+    const requestUrl =
+      error?.request?.url || error?.request?.endpoint || error?.request?.route || undefined
+
+    const documentationUrl = error?.response?.data?.documentation_url
+    const apiMessage = error?.response?.data?.message
+
+    return {
+      status,
+      message,
+      apiMessage,
+      requestUrl,
+      documentationUrl
+    }
+  }
+
+  private logSweepFailure(context: string, issueNumber: number, error: any): void {
+    const info = this.formatOctokitError(error)
+
+    core.warning(
+      [
+        `[sweep] ${context} failed for #${issueNumber}`,
+        info.status ? `status=${info.status}` : undefined,
+        info.message ? `message="${info.message}"` : undefined,
+        info.apiMessage ? `apiMessage="${info.apiMessage}"` : undefined,
+        info.requestUrl ? `requestUrl=${info.requestUrl}` : undefined,
+        info.documentationUrl ? `documentationUrl=${info.documentationUrl}` : undefined
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    )
+
+    // Useful for deep debugging in action logs
+    core.debug(`[sweep] error object: ${JSON.stringify(error, null, 2)}`)
+  }
+
+  /**
+   * Runs a batch of write operations with allSettled so one failure doesn't halt the run.
+   * Returns { ok, failed } counts for reporting.
+   */
+  private async runWriteBatch<T>(
+    batch: T[],
+    runner: (item: T) => Promise<void>,
+    describe: (item: T) => { context: string; issueNumber: number }
+  ): Promise<{ ok: number; failed: number }> {
+    const settled = await Promise.allSettled(batch.map((item) => runner(item)))
+    let ok = 0
+    let failed = 0
+
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i]
+      const meta = describe(batch[i])
+
+      if ('fulfilled' === result.status) {
+        ok++
+      } else {
+        failed++
+        this.logSweepFailure(meta.context, meta.issueNumber, result.reason)
+      }
+    }
+
+    return { ok, failed }
   }
 }

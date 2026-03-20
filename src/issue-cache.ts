@@ -76,7 +76,7 @@ export class IssueCache {
     }
 
     const missingCloser = undefined === details.closed_by?.login
-    const suspiciousCloser = 'unknown' === details.closed_by.login
+    const suspiciousCloser = 'unknown' === details.closed_by?.login
     const missingClosedAt = undefined === details.closed_at
 
     // Only hit the timeline endpoint when we actually need it

@@ -31,7 +31,7 @@ async function run(): Promise<void> {
         await noResponse.handleClosedIssue()
       }
     } else {
-      core.info(`This action was skipped. Unrecognized event: ${eventName}"`)
+      core.info(`This action was skipped. Unrecognized event: ${eventName}`)
     }
   } catch (error: any) {
     // Graceful failure reporting for the GitHub UI

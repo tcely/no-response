@@ -87,6 +87,8 @@ export class IssueCache {
     const timeline = await this.client.fetchTimeline(details)
     const lastClosed = findLastClosedEvent(timeline)
     if (lastClosed === undefined) {
+      if (missingClosedAt) details.closed_at = new Date(0)
+      if (missingCloser) details.closed_by = { login: 'unknown' }
       return { details, timeline }
     }
 

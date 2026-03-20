@@ -42,6 +42,6 @@ export function findLastClosedEvent(timeline: TimelineEvent[]): TimelineEvent | 
   // GitHub timeline can contain multiple close/reopen cycles.
   // We want the most recent "closed".
   return timeline
-    .filter((e) => 'closed' === e.event)
+    .filter((e) => 'closed' === e.event && e.created_at)
     .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0]
 }

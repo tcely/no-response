@@ -18,6 +18,7 @@ import { RepoMetadataCache } from './repo-metadata-cache'
 import { Repository, Label, Issue, IssueDetails } from './types'
 
 export default class NoResponse {
+  private gracePeriodMs: number
   private client: GitHubApiClient
   private repoMetadata: RepoMetadataCache
   private issueCache: IssueCache
@@ -27,6 +28,7 @@ export default class NoResponse {
   private optionalFollowUpLabel?: Label
 
   constructor(private config: Config) {
+    this.gracePeriodMs = 1000 * 60 * 15 // minutes
     this.client = new GitHubApiClient(config.token)
     this.repoMetadata = new RepoMetadataCache(this.client)
     this.issueCache = new IssueCache(this.client, this.repoMetadata)
@@ -118,12 +120,11 @@ export default class NoResponse {
      * Reopen only if the comment happened after the grace period.
      */
     if (isAuthorClosed) {
-      const gracePeriodMs = 1000 * 60 * 15 // minutes
       const closedAt = details.closed_at.getTime()
       const createdAt = toDate(payload.comment.created_at)
       const commentedAt = createdAt ? createdAt.getTime() : Date.now()
 
-      if (gracePeriodMs < commentedAt - closedAt) {
+      if (this.gracePeriodMs < commentedAt - closedAt) {
         core.info(
           `Author follow-up on self-closed ${this.repository.owner}/${this.repository.name}#${issueDetails.number} after grace period. Reopening.`
         )
@@ -172,17 +173,16 @@ export default class NoResponse {
       const issueDetails = await this.issueCache.fetchDetails(issue)
       const { details, timeline } = await this.issueCache.ensureClosureDetails(issueDetails)
 
-      if (!checkClosedByAuthor(details)) {
-        const closedAt = details.closed_at.getTime()
-        const events = timeline ?? (await this.client.fetchTimeline(details))
-        const authorResponded = events.some(
-          (e) =>
-            'commented' === e.event &&
-            details.user.login === e.actor.login &&
-            closedAt < e.created_at.getTime()
-        )
-        if (authorResponded) reopenable.push(details)
-      }
+      const closedAt =
+        (checkClosedByAuthor(details) ? this.gracePeriodMs : 0) + details.closed_at.getTime()
+      const events = timeline ?? (await this.client.fetchTimeline(details))
+      const authorResponded = events.some(
+        (e) =>
+          'commented' === e.event &&
+          details.user.login === e.actor.login &&
+          closedAt < e.created_at.getTime()
+      )
+      if (authorResponded) reopenable.push(details)
     }
     return reopenable
   }

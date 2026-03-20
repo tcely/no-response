@@ -58,7 +58,7 @@
 
 - [x] **Readonly Properties**: Marked all class properties as `readonly` for immutability.
 - [x] **Safe Parsing**: Implemented `parseInt(..., 10) || default` fallbacks to handle invalid or missing numeric inputs.
-- [ ] **Input Validation**: Ensure `daysUntilClose` is a positive integer. If the parsed value is zero or less, fallback to the default (14).
+- [x] **Input Validation**: Ensure `daysUntilClose` is a positive integer. If the parsed value is zero or less, fallback to the default (14).
 - [ ] **Optional Token Input**: Modify the constructor to fallback from `core.getInput('token')` to standard environment variables like `GITHUB_TOKEN`. The token is still mandatory for API calls, but providing it via `with:` should become optional.
 
 ## Testing (test/config.test.ts)

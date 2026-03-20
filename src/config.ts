@@ -51,8 +51,8 @@ export default class Config {
       this.closeComment = undefined
     }
 
-    this.daysUntilClose =
-      parseInt(this.valueOrDefault(core.getInput('daysUntilClose'), '14'), 10) || 14
+    const rawDays = parseInt(this.valueOrDefault(core.getInput('daysUntilClose'), '14'), 10)
+    this.daysUntilClose = rawDays && 0 < rawDays ? rawDays : 14
 
     this.repo = github.context.repo
 
@@ -66,8 +66,8 @@ export default class Config {
       'more-information-needed'
     )
 
-    this.maxIssuesPerRun =
-      parseInt(this.valueOrDefault(core.getInput('maxIssuesPerRun'), '50'), 10) || 50
+    const rawMaxIssues = parseInt(this.valueOrDefault(core.getInput('maxIssuesPerRun'), '50'), 10)
+    this.maxIssuesPerRun = rawMaxIssues && 0 < rawMaxIssues ? rawMaxIssues : 50
 
     this.token = core.getInput('token', { required: true })
 

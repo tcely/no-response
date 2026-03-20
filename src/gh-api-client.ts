@@ -52,12 +52,12 @@ export class GitHubApiClient {
    * Fetches all labels for a repository.
    */
   async fetchLabels(repo: Repository): Promise<Label[]> {
-    const { data } = await this.octokit.rest.issues.listLabelsForRepo({
+    const labels = await this.octokit.paginate(this.octokit.rest.issues.listLabelsForRepo, {
       ...this.repoParams(repo),
       per_page: 100
     })
 
-    return data.map((l) => ({
+    return labels.map((l) => ({
       name: l.name,
       repo,
       color: l.color,

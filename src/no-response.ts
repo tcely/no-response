@@ -2,10 +2,11 @@
 
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import { IssueCommentEvent, IssuesEvent } from '@octokit/webhooks-types'
+import { IssueCommentEvent, IssuesEvent, IssuesLabeledEvent } from '@octokit/webhooks-types'
 
 import Config from './config'
 import { GitHubApiClient } from './gh-api-client'
+import { toDate } from './gh-api-helpers'
 import { IssueCache } from './issue-cache'
 import {
   isLabeled,
@@ -33,7 +34,11 @@ export default class NoResponse {
 
   private async initializeMetadata(): Promise<void> {
     if (this.repository && this.responseRequiredLabel) return
-    this.repository = await this.repoMetadata.getInitializedRepository(this.config.repo)
+    const baseRepo = {
+      owner: this.config.repo.owner,
+      name: this.config.repo.repo
+    }
+    this.repository = await this.repoMetadata.getInitializedRepository(baseRepo)
 
     this.responseRequiredLabel = {
       name: this.config.responseRequiredLabel,
@@ -73,7 +78,7 @@ export default class NoResponse {
 
   async handleLabeled(): Promise<void> {
     await this.initializeMetadata()
-    const payload = github.context.payload as IssuesEvent
+    const payload = github.context.payload as IssuesLabeledEvent
 
     if (payload.label?.name !== this.responseRequiredLabel.name) return
 
@@ -93,7 +98,8 @@ export default class NoResponse {
     // Verify: Only proceed if the commenter is the original author
     if (issueDetails.user.login !== payload.comment.user.login) return
 
-    const isAuthorClosed = checkClosedByAuthor(issueDetails)
+    const { details } = await this.issueCache.ensureClosureDetails(issueDetails)
+    const isAuthorClosed = checkClosedByAuthor(details)
 
     /*
      * CASE 1: Closed by someone else (Bot/Maintainer).
@@ -113,8 +119,9 @@ export default class NoResponse {
      */
     if (isAuthorClosed) {
       const gracePeriodMs = 1000 * 60 * 15 // minutes
-      const closedAt = issueDetails.closed_at!.getTime()
-      const commentedAt = new Date(payload.comment.created_at).getTime()
+      const closedAt = details.closed_at.getTime()
+      const createdAt = toDate(payload.comment.created_at)
+      const commentedAt = createdAt ? createdAt.getTime() : Date.now()
 
       if (gracePeriodMs < commentedAt - closedAt) {
         core.info(
@@ -162,10 +169,10 @@ export default class NoResponse {
         state: raw.state as 'open' | 'closed',
         user: { login: raw.user!.login }
       }
-      const details = await this.issueCache.fetchDetails(issue)
+      const issueDetails = await this.issueCache.fetchDetails(issue)
+      const { details, timeline } = await this.issueCache.ensureClosureDetails(issueDetails)
 
       if (!checkClosedByAuthor(details)) {
-        const timeline = await this.client.fetchTimeline(details)
         const closedAt = details.closed_at!.getTime()
         const authorResponded = timeline.some(
           (e) =>
@@ -188,7 +195,7 @@ export default class NoResponse {
 
     const closeable: IssueDetails[] = []
     for (const raw of results) {
-      if (closeable.length > this.config.maxIssuesPerRun) break
+      if (closeable.length >= this.config.maxIssuesPerRun) break
       if (await this.verifyStaleStatus(raw.number)) {
         closeable.push(await this.issueCache.fetch(this.repository, raw.number))
       }

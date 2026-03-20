@@ -1,6 +1,14 @@
 // src/gh-api-helpers.ts
 
-import { Issue, RestIssue, Label, RestLabel, TimelineEvent } from './types'
+import {
+  Issue,
+  IssueDetails,
+  Label,
+  Repository,
+  RestIssue,
+  RestLabel,
+  TimelineEvent
+} from './types'
 
 /**
  * Transforms an Issue into a clean RestIssue for API calls.
@@ -28,7 +36,9 @@ export function toRestLabel(label: Label): RestLabel {
  * Safely converts an optional ISO 8601 string to a Date object.
  */
 export function toDate(dateStr?: string | null): Date | undefined {
-  return dateStr ? new Date(dateStr) : undefined
+  if (!dateStr) return undefined
+  const d = new Date(dateStr)
+  return Number.isNaN(d.getTime()) ? undefined : d
 }
 
 /**
@@ -38,7 +48,7 @@ export function mapRestIssue(raw: any, repo: Repository): IssueDetails {
   return {
     number: raw.number,
     repo,
-    state: raw.state as 'open' | 'closed',
+    state: raw.state,
     user: { login: raw.user?.login || 'unknown' },
     labels: (raw.labels || []).map((l: any) => ({
       name: 'string' === typeof l ? l : l.name!,
@@ -55,7 +65,7 @@ export function mapRestIssue(raw: any, repo: Repository): IssueDetails {
  */
 export function mapTimelineEvent(raw: any): TimelineEvent {
   return {
-    event: raw.event,
+    event: String(raw.event || ''),
     created_at: toDate(raw.created_at) ?? new Date(0),
     actor: { login: raw.actor?.login || 'unknown' },
     label: raw.label ? { name: raw.label.name } : undefined

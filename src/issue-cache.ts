@@ -1,8 +1,9 @@
 // src/issue-cache.ts
 
-import { Repository, Issue, IssueDetails } from './types'
-import { RepoMetadataCache } from './repo-metadata-cache'
 import { GitHubApiClient } from './gh-api-client'
+import { findLastClosedEvent } from './logic-helpers'
+import { RepoMetadataCache } from './repo-metadata-cache'
+import { Issue, IssueDetails, Repository, TimelineEvent } from './types'
 
 export class IssueCache {
   // Key format: "repoNodeId:issueNumber"
@@ -61,5 +62,41 @@ export class IssueCache {
    */
   async fetchDetails(issue: Issue): Promise<IssueDetails> {
     return await this.fetch(issue.repo, issue.number)
+  }
+
+  /**
+   * If an issue is closed but closure metadata is missing/suspicious, fetch timeline
+   * and seed closed_by (and optionally closed_at) into IssueDetails + cache.
+   */
+  async ensureClosureDetails(
+    details: IssueDetails
+  ): Promise<{ details: IssueDetails; timeline: TimelineEvent[] | undefined }> {
+    if ('closed' !== details.state) {
+      return { details, timeline: undefined }
+    }
+
+    const missingCloser = undefined === details.closed_by?.login
+    const suspiciousCloser = 'unknown' === details.closed_by.login
+    const missingClosedAt = undefined === details.closed_at
+
+    // Only hit the timeline endpoint when we actually need it
+    if (!(missingCloser || suspiciousCloser || missingClosedAt)) {
+      return { details, timeline: undefined }
+    }
+
+    const timeline = await this.client.fetchTimeline(details)
+    const lastClosed = findLastClosedEvent(timeline)
+    if (lastClosed === undefined) {
+      return { details, timeline }
+    }
+
+    // Patch what we can from timeline
+    if (missingCloser || suspiciousCloser) details.closed_by = { login: lastClosed.actor.login }
+
+    // Optional: timeline "closed" created_at can be used if REST closed_at is missing
+    if (missingClosedAt) details.closed_at = lastClosed.created_at
+
+    await this.set(details.repo, details)
+    return { details, timeline }
   }
 }

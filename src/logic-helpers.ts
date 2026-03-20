@@ -37,3 +37,11 @@ export function getExpiryDate(days: number): Date {
   const ttl = 1000 * 60 * 60 * 24 * days
   return new Date(Date.now() - ttl)
 }
+
+export function findLastClosedEvent(timeline: TimelineEvent[]): TimelineEvent | undefined {
+  // GitHub timeline can contain multiple close/reopen cycles.
+  // We want the most recent "closed".
+  return timeline
+    .filter((e) => 'closed' === e.event)
+    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0]
+}

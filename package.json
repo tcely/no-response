@@ -6,9 +6,10 @@
   "main": "src/main.ts",
   "type": "module",
   "scripts": {
-    "ci": "bun run format && bun run lint && bun run test",
+    "ci": "bun run format && bun run lint && bun run check:types && bun run test",
     "build": "bun build --compile --outfile bin/no-response-bin ./src/main.ts",
-    "format:write": "bun x -- prettier --write **/*.ts **/*.md **/*.yaml **/*.yml",
+    "check:types": "bun x --package=typescript -- tsc --noEmit --moduleResolution bundler --module es2022 --target es2022 --lib es2022,dom src/main.ts",
+    "format:write": "bun x -- prettier --write **/*.ts **/*.yaml **/*.yml",
     "format": "bun x -- prettier --check **/*.ts **/*.yaml **/*.yml",
     "lint": "bun x -- eslint src/**/*.ts",
     "test": "bun test"

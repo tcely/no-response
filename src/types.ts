@@ -46,8 +46,20 @@ export interface Issue {
   user: { login: string }
 }
 
-export interface IssueDetails extends Issue {
+export interface IssueDetailsBase extends Issue {
   labels: Label[]
-  closed_at?: Date
+}
+
+export interface OpenIssueDetails extends IssueDetailsBase {
+  state: 'open'
+  closed_at?: undefined
+  closed_by?: undefined
+}
+
+export interface ClosedIssueDetails extends IssueDetailsBase {
+  state: 'closed'
+  closed_at: Date
   closed_by?: { login: string }
 }
+
+export type IssueDetails = OpenIssueDetails | ClosedIssueDetails

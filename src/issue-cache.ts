@@ -35,8 +35,8 @@ export class IssueCache {
   /**
    * Caches or updates an issue's details manually.
    */
-  async set(repo: Repository, details: IssueDetails): Promise<void> {
-    const key = await this.makeKey(repo, details.number)
+  async set(details: IssueDetails): Promise<void> {
+    const key = await this.makeKey(details.repo, details.number)
     this.cache.set(key, details)
   }
 
@@ -53,7 +53,7 @@ export class IssueCache {
 
     const details = await this.client.fetchIssueByNumber(repo, number)
 
-    await this.set(repo, details)
+    await this.set(details)
     return details
   }
 
@@ -66,7 +66,7 @@ export class IssueCache {
 
   async updateLabels(details: IssueDetails, labels: Label[]): Promise<void> {
     details.labels = labels
-    await this.set(details.repo, details)
+    await this.set(details)
   }
 
   async addLabels(issue: IssueDetails, labelsToAdd: Label[]): Promise<IssueDetails> {
@@ -115,7 +115,7 @@ export class IssueCache {
     // Optional: timeline "closed" created_at can be used if REST closed_at is missing
     if (missingClosedAt) details.closed_at = lastClosed.created_at
 
-    await this.set(details.repo, details)
+    await this.set(details)
     return { details, timeline }
   }
 }

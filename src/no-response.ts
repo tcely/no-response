@@ -304,14 +304,17 @@ export default class NoResponse {
     const details = await this.issueCache.fetch(this.repository, number)
     core.info(`Closing ${this.repository.owner}/${this.repository.name}#${number} as "not_planned"`)
     if (this.config.closeComment) await this.client.createComment(details, this.config.closeComment)
-    details.state = 'closed'
-    const updated = await this.client.updateIssueState(details, 'not_planned')
+    const updated = await this.client.updateIssueState(
+      { ...details, state: 'closed' },
+      'not_planned'
+    )
+    await this.issueCache.set(updated)
   }
 
   private async reopenAndAdjustLabels(number: number): Promise<void> {
     const details = await this.issueCache.fetch(this.repository, number)
-    details.state = 'open'
-    const updated = await this.client.updateIssueState(details, 'reopened')
+    const updated = await this.client.updateIssueState({ ...details, state: 'open' }, 'reopened')
+    await this.issueCache.set(updated)
     await this.transitionToFollowUp(updated)
   }
 

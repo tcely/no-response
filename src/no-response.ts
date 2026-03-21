@@ -238,13 +238,7 @@ export default class NoResponse {
 
     const reopenable: IssueDetails[] = []
     for (const raw of results) {
-      const issue: Issue = {
-        number: raw.number,
-        repo: this.repository,
-        state: raw.state as 'open' | 'closed',
-        user: { login: raw.user!.login }
-      }
-      const issueDetails = await this.issueCache.fetchDetails(issue)
+      const issueDetails = await this.issueCache.fetch(this.repository, raw.number)
       const { details, timeline } = await this.issueCache.ensureClosureDetails(issueDetails)
 
       const closedAt =

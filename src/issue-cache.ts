@@ -3,7 +3,7 @@
 import { GitHubApiClient } from './gh-api-client'
 import { findLastClosedEvent } from './logic-helpers'
 import { RepoMetadataCache } from './repo-metadata-cache'
-import { Issue, IssueDetails, Repository, TimelineEvent } from './types'
+import { Issue, IssueDetails, Label, Repository, TimelineEvent } from './types'
 
 export class IssueCache {
   // Key format: "repoNodeId:issueNumber"
@@ -62,6 +62,23 @@ export class IssueCache {
    */
   async fetchDetails(issue: Issue): Promise<IssueDetails> {
     return await this.fetch(issue.repo, issue.number)
+  }
+
+  async updateLabels(details: IssueDetails, labels: Label[]): Promise<void> {
+    details.labels = labels
+    await this.set(details.repo, details)
+  }
+
+  async addLabels(issue: IssueDetails, labelsToAdd: Label[]): Promise<IssueDetails> {
+    const labels = await this.client.addLabels(issue, labelsToAdd)
+    await this.updateLabels(issue, labels)
+    return await this.fetchDetails(issue)
+  }
+
+  async removeLabels(issue: IssueDetails, labelsToRemove: Label[]): Promise<IssueDetails> {
+    const labels = await this.client.removeLabels(issue, labelsToRemove)
+    await this.updateLabels(issue, labels)
+    return await this.fetchDetails(issue)
   }
 
   /**

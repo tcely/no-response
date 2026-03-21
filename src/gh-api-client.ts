@@ -206,7 +206,8 @@ export class GitHubApiClient {
     const restIssue = toRestIssue(issue)
     const toRemoveNames = new Set(labelsToRemove.map((l) => l.name))
 
-    const remainingLabels = issue.labels.filter((l) => !toRemoveNames.has(l.name))
+    const refreshed = await this.fetchIssue(issue)
+    const remainingLabels = refreshed.labels.filter((l) => !toRemoveNames.has(l.name))
     const remainingNames = remainingLabels.map((l) => l.name)
 
     await this.octokit.rest.issues.setLabels({

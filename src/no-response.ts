@@ -322,7 +322,7 @@ export default class NoResponse {
     if (this.optionalFollowUpLabel && isLabeled(issue, this.optionalFollowUpLabel))
       labelsToRemove.push(this.optionalFollowUpLabel)
 
-    await this.client.removeLabels(issue, labelsToRemove)
+    await this.issueCache.removeLabels(issue, labelsToRemove)
   }
 
   private async unassignAuthor(issue: IssueDetails): Promise<void> {
@@ -344,13 +344,13 @@ export default class NoResponse {
    */
   private async transitionToFollowUp(issue: IssueDetails): Promise<void> {
     if (isLabeled(issue, this.responseRequiredLabel)) {
-      await this.client.removeLabels(issue, [this.responseRequiredLabel])
+      await this.issueCache.removeLabels(issue, [this.responseRequiredLabel])
       await this.unassignAuthor(issue)
     }
 
     if (this.optionalFollowUpLabel) {
       await this.repoMetadata.createLabel(this.optionalFollowUpLabel)
-      await this.client.addLabels(issue, [this.optionalFollowUpLabel])
+      await this.issueCache.addLabels(issue, [this.optionalFollowUpLabel])
     }
   }
 

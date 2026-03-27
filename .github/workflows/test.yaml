@@ -10,26 +10,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@v6
 
-      - name: Remove lock file for dependabot
-        if: startsWith(github.head_ref, 'dependabot/')
-        shell: bash
-        run: |
-          rm -v -f bun.lock
-
       - name: Setup Bun
+        id: setup_bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Test & Build Binary
+      - name: Regenerate lockfile (Dependabot only)
+        if: startsWith(github.head_ref, 'dependabot/')
+        shell: bash
+        run: bun install --lockfile-only
+
+      - name: Upload regenerated bun.lock
+        id: upload_regenerated-bun-lock
+        if: startsWith(github.head_ref, 'dependabot/')
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          overwrite: true
+          name: regenerated-bun-lock
+          path: bun.lock
+
+      - name: Ensure bun.lock exists
         shell: bash
         run: |
           # Ensure a lockfile exists for the frozen install
           test -s bun.lock || bun install --lockfile-only
 
+      - name: Install dependencies
+        shell: bash
+        run: |
           # Install all dependencies (including dev) for CI/Tests
           bun install --frozen-lockfile
 
+      - name: Test & Build Binary
+        shell: bash
+        run: |
           # Run lint, format check, and bun test via your 'ci' script
           bun run ci
 

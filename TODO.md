@@ -2,7 +2,7 @@
 
 ## action.yml (Composite Action)
 
-- [ ] **Simplify Run Step**: Remove the `env:` block from the `Run Action` step. GitHub automatically exports all `inputs` as `INPUT_<UPPERCASE_NAME>` environment variables.
+- [x] **Simplify Run Step**: Remove the `env:` block from the `Run Action` step. GitHub automatically exports all `inputs` as `INPUT_<UPPERCASE_NAME>` environment variables.
 
 ## src/no-response.ts (Orchestrator)
 
@@ -11,7 +11,7 @@
 
 ## src/config.ts
 
-- [ ] **Optional Token Input**: Modify the constructor to fallback from `core.getInput('token')` to standard environment variables like `GITHUB_TOKEN`. The token is still mandatory for API calls, but providing it via `with:` should become optional.
+- [x] **Optional Token Input**: Modify the constructor to fallback from `core.getInput('token')` to standard environment variables like `GITHUB_TOKEN`. The token is still mandatory for API calls, but providing it via `with:` should become optional.
 
 ## Testing (test/config.test.ts)
 

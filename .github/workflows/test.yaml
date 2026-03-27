@@ -66,9 +66,15 @@ jobs:
           export INPUT_DAYSUNTILCLOSE="14"
           export INPUT_RESPONSEREQUIREDLABEL="more-information-needed"
 
-          if ./bin/no-response-bin; then
+          if OUTPUT="$(INPUT_TOKEN= ./bin/no-response-bin 2>&1)"; then
             echo "Error: Binary exited with 0 but should have failed on missing token."
             exit 1
           else
-            echo "Operational test passed: Binary correctly reached internal config logic."
+            RC=$?
+            case "${RC}|${OUTPUT}" in
+              (1|*token*)
+                echo "Operational test passed: Binary correctly reached internal config logic."
+                ;;
+              (*) INPUT_TOKEN= ./bin/no-response-bin ;;
+            esac
           fi

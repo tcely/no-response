@@ -12,6 +12,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Remove lock file for dependabot
+        if: startsWith(github.head_ref, 'dependabot/')
+        shell: bash
+        run: |
+          rm -v -f bun.lock
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 

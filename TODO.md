@@ -6,30 +6,7 @@
 
 ## CI/CD Logic (.github/workflows/test.yaml)
 
-- [ ] **Enhanced Binary Smoke Test**: Verify binary functionality and report the embedded Bun version without fragile string matching.
-
-```yaml
-    - name: Smoke Test Binary
-      shell: bash
-      run: |
-        # 1. Report the embedded Bun version using the Bun CLI mode
-        BUN_VERSION=$(BUN_BE_BUN=1 ./bin/no-response-bin --version)
-        echo "Binary successfully executed. Embedded Bun Version: $BUN_VERSION"
-
-        # 2. Operational Validation
-        # Provide standard default inputs to trigger the internal logic.
-        # The binary should reach the 'token' requirement check and exit
-        # with code 1, confirming the TS bundle is intact and executable.
-        export INPUT_DAYSUNTILCLOSE="14"
-        export INPUT_RESPONSEREQUIREDLABEL="more-information-needed"
-
-        if ./bin/no-response-bin; then
-          echo "Error: Binary exited with 0 but should have failed on missing token."
-          exit 1
-        else
-          echo "Operational test passed: Binary correctly reached internal config logic."
-        fi
-```
+- [x] **Enhanced Binary Smoke Test**: Verified binary functionality and reported the embedded Bun version without fragile string matching.
 
 ## src/types.ts & GitHubApiClient
 
@@ -49,8 +26,8 @@
 - [x] **Author Assignment Logic**:
     - Implement `handleLabeled` to assign author on `responseRequiredLabel`.
     - Update `transitionToFollowUp` to unassign author only if the required label was present.
-- [ ] **API Resilience**: Wrap the `sweep` batch processing in a `try/catch` block so failures on specific issues (e.g., 403 on locked issues) don't halt the entire run.
-- [ ] **Rate Limit Protection**: Add a small delay (e.g., `1000 // ms`) between batch writes in the `sweep` to avoid triggering GitHub's secondary rate limits.
+- [x] **API Resilience**: Wrap the `sweep` batch processing in a `try/catch` block so failures on specific issues (e.g., 403 on locked issues) don't halt the entire run.
+- [x] **Rate Limit Protection**: Add a small delay (e.g., `1000 // ms`) between batch writes in the `sweep` to avoid triggering GitHub's secondary rate limits.
 - [ ] **Summary Output**: Use `core.summary` to generate a high-level report (scanned, closed, and reopened counts) on the GitHub Action run page.
 - [ ] **Dry Run Mode**: Support a `dryRun` configuration that logs intended changes without performing actual API writes.
 

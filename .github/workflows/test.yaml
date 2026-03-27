@@ -54,3 +54,27 @@ jobs:
           mkdir -p bin
           bun build --compile --outfile bin/no-response-bin ./src/main.ts
           chmod a+rx bin/no-response-bin
+
+          # Report the embedded Bun version using the Bun CLI mode
+          BUN_VERSION=$(BUN_BE_BUN=1 ./bin/no-response-bin --version)
+          echo "Binary successfully executed. Embedded Bun Version: $BUN_VERSION"
+
+          # Operational Validation
+          # Provide standard default inputs to trigger the internal logic.
+          # The binary should reach the 'token' requirement check and exit
+          # with code 1, confirming the TS bundle is intact and executable.
+          export INPUT_DAYSUNTILCLOSE="14"
+          export INPUT_RESPONSEREQUIREDLABEL="more-information-needed"
+
+          if OUTPUT="$(INPUT_TOKEN= ./bin/no-response-bin 2>&1)"; then
+            echo "Error: Binary exited with 0 but should have failed on missing token."
+            exit 1
+          else
+            RC=$?
+            case "${RC}|${OUTPUT}" in
+              (1|*token*)
+                echo "Operational test passed: Binary correctly reached internal config logic."
+                ;;
+              (*) INPUT_TOKEN= ./bin/no-response-bin ;;
+            esac
+          fi

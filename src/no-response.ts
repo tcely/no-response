@@ -132,7 +132,7 @@ export default class NoResponse {
 
     const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
 
-    core.info(`Target label matched.`)
+    core.info('Target label matched.')
     await this.assignAuthor(issueDetails)
   }
 
@@ -236,7 +236,7 @@ export default class NoResponse {
       return
     }
     core.info(`Adding author assignee to issue #${issue.number}`)
-    return await this.client.addAssignees(issueDetails, [login])
+    return await this.client.addAssignees(issue, [login])
   }
 
   private async unassignAuthor(issue: IssueDetails): Promise<void> {

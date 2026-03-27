@@ -1,4 +1,4 @@
-name: no-response-add-label
+name: no-response
 description: Closes Issues where the original author doesn't respond to a request for information
 inputs:
   closeComment:
@@ -28,7 +28,8 @@ inputs:
     default: 50
   token:
     description: Token to access the GitHub API
-    required: true
+    default: ${{ github.token }}
+    required: false
 
 runs:
   using: 'composite'
@@ -55,7 +56,7 @@ runs:
     - name: Cleanup temporary hash files
       if: always() # Run even if hashing or caching failed
       shell: bash
-      run: rm -rf .remote-action-hashFiles
+      run: rm -v -rf .remote-action-hashFiles
 
     - name: Setup Bun
       if: steps.cache-binary.outputs.cache-hit != 'true'
@@ -76,19 +77,10 @@ runs:
       id: run-action
       shell: bash
       working-directory: ${{ github.action_path }}
-      env:
-        INPUT_TOKEN: ${{ inputs.token }}
-        INPUT_CLOSECOMMENT: ${{ inputs.closeComment }}
-        INPUT_DAYSUNTILCLOSE: ${{ inputs.daysUntilClose }}
-        INPUT_RESPONSEREQUIREDCOLOR: ${{ inputs.responseRequiredColor }}
-        INPUT_RESPONSEREQUIREDLABEL: ${{ inputs.responseRequiredLabel }}
-        INPUT_OPTIONALFOLLOWUPLABEL: ${{ inputs.optionalFollowUpLabel }}
-        INPUT_OPTIONALFOLLOWUPLABELCOLOR: ${{ inputs.optionalFollowUpLabelColor }}
-        INPUT_MAXISSUESPERRUN: ${{ inputs.maxIssuesPerRun }}
       run: ./bin/no-response-bin
 
     - name: Handle Failure
-      if: failure() && steps.run-action.outcome == 'failure'
+      if: failure() && 'failure' == steps.run-action.outcome
       shell: bash
       run: |
         echo "::error::The Bun binary failed to execute. Check logs for details."

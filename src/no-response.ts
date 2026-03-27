@@ -132,10 +132,8 @@ export default class NoResponse {
 
     const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
 
-    core.info(
-      `Target label matched. Assigning #${issueDetails.number} to author: ${issueDetails.user.login}`
-    )
-    await this.client.addAssignees(issueDetails, [issueDetails.user.login])
+    core.info(`Target label matched.`)
+    await this.assignAuthor(issueDetails)
   }
 
   /**
@@ -229,6 +227,30 @@ export default class NoResponse {
     await this.clearWorkflowLabels(issueDetails)
   }
 
+  private async assignAuthor(issue: IssueDetails): Promise<void> {
+    const login = issue.user?.login
+    if (!login || 'unknown' === login) {
+      core.warning(
+        `Skipping author assignment addition for ${issue.repo.owner}/${issue.repo.name}#${issue.number}: missing/unknown author login.`
+      )
+      return
+    }
+    core.info(`Adding author assignee to issue #${issue.number}`)
+    return await this.client.addAssignees(issueDetails, [login])
+  }
+
+  private async unassignAuthor(issue: IssueDetails): Promise<void> {
+    const login = issue.user?.login
+    if (!login || 'unknown' === login) {
+      core.warning(
+        `Skipping author assigment removal for ${issue.repo.owner}/${issue.repo.name}#${issue.number}: missing/unknown author login.`
+      )
+      return
+    }
+    core.info(`Removing author assignee from issue #${issue.number}`)
+    return await this.client.removeAssignees(issue, [login])
+  }
+
   private async getReopenableIssues(): Promise<IssueDetails[]> {
     const q = `repo:${this.repository.owner}/${this.repository.name} is:issue is:closed label:"${this.responseRequiredLabel.name}"`
     const results = await this.client.octokit.paginate(
@@ -320,11 +342,6 @@ export default class NoResponse {
       labelsToRemove.push(this.optionalFollowUpLabel)
 
     await this.issueCache.removeLabels(issue, labelsToRemove)
-  }
-
-  private async unassignAuthor(issue: IssueDetails): Promise<void> {
-    core.info(`Removing author assignee from issue #${issue.number}`)
-    return await this.client.removeAssignees(issue, [issue.user.login])
   }
 
   /**

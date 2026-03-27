@@ -19,30 +19,30 @@ interface Repo {
  */
 export default class Config {
   /** Comment to use when closing an issue, if any. */
-  closeComment: string | undefined
+  readonly closeComment: string | undefined
 
   /** How old an issue should be in days before it gets closed. */
-  daysUntilClose: number
+  readonly daysUntilClose: number
 
   /** Repository to operate on. */
-  repo: Repo
+  readonly repo: Repo
 
   /** Color to use when creating the label, encoded as a hex string. */
-  responseRequiredColor: string
+  readonly responseRequiredColor: string
 
   /** Name of the label to use for issues that need more information or clarification. */
-  responseRequiredLabel: string
+  readonly responseRequiredLabel: string
 
   /** An optional label to add when the `responseRequiredLabel` gets removed due to issue author's reply */
-  optionalFollowUpLabel?: string
+  readonly optionalFollowUpLabel?: string
 
   /** An optional label to add when the `responseRequiredLabel` gets removed due to issue author's reply */
-  optionalFollowUpLabelColor?: string
+  readonly optionalFollowUpLabelColor?: string
 
-  maxIssuesPerRun: number
+  readonly maxIssuesPerRun: number
 
   /** GitHub token to use when performing API operations. */
-  token: string
+  readonly token: string
 
   constructor() {
     this.closeComment = this.valueOrDefault(core.getInput('closeComment'), defaultCloseComment)
@@ -51,7 +51,8 @@ export default class Config {
       this.closeComment = undefined
     }
 
-    this.daysUntilClose = parseInt(this.valueOrDefault(core.getInput('daysUntilClose'), '14'))
+    const rawDays = parseInt(this.valueOrDefault(core.getInput('daysUntilClose'), '14'), 10)
+    this.daysUntilClose = rawDays && 0 < rawDays ? rawDays : 14
 
     this.repo = github.context.repo
 
@@ -65,7 +66,8 @@ export default class Config {
       'more-information-needed'
     )
 
-    this.maxIssuesPerRun = parseInt(this.valueOrDefault(core.getInput('maxIssuesPerRun'), '50'))
+    const rawMaxIssues = parseInt(this.valueOrDefault(core.getInput('maxIssuesPerRun'), '50'), 10)
+    this.maxIssuesPerRun = rawMaxIssues && 0 < rawMaxIssues ? rawMaxIssues : 50
 
     this.token = core.getInput('token', { required: true })
 

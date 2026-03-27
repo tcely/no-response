@@ -52,6 +52,11 @@ runs:
         path: ${{ github.action_path }}/bin/no-response-bin
         key: no-response-bin-${{ runner.os }}-${{ hashFiles('.remote-action-hashFiles/**') }}
 
+    - name: Cleanup temporary hash files
+      if: always() # Run even if hashing or caching failed
+      shell: bash
+      run: rm -rf .remote-action-hashFiles
+
     - name: Setup Bun
       if: steps.cache-binary.outputs.cache-hit != 'true'
       uses: oven-sh/setup-bun@v2

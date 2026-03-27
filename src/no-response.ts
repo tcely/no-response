@@ -1,348 +1,438 @@
-import * as fs from 'node:fs'
+// src/no-response.ts
+
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import { IssueCommentEvent, IssuesEvent, IssuesLabeledEvent } from '@octokit/webhooks-types'
 
 import Config from './config'
-
-/* eslint-disable import/no-unresolved, import/named */
-import { IssueCommentEvent, IssuesEvent } from '@octokit/webhooks-types'
-/* eslint-enable */
-
-const fsp = fs.promises
-
-interface Issue {
-  issue_number: number
-  owner: string
-  repo: string
-}
-
-interface LabeledEvent {
-  created_at: string // GitHub API returns ISO strings
-  event: string
-  label?: {
-    name: string
-  }
-}
-
-interface TimelineEvent extends LabeledEvent {
-  actor: {
-    login: string
-  }
-}
-
-interface RestIssue {
-  number: number
-}
+import { GitHubApiClient } from './gh-api-client'
+import { toDate } from './gh-api-helpers'
+import { IssueCache } from './issue-cache'
+import {
+  isLabeled,
+  checkClosedByAuthor,
+  getExpiryDate,
+  isTargetLabeledEvent
+} from './logic-helpers'
+import { RepoMetadataCache } from './repo-metadata-cache'
+import { Repository, Label, Issue, IssueDetails } from './types'
 
 export default class NoResponse {
-  config: Config
-  octokit: ReturnType<typeof github.getOctokit>
+  private gracePeriodMs = 1000 * 60 * 15 // minutes
 
-  // Cache for label existence (key: label name)
-  private verifiedLabels = new Map<string, boolean>()
+  private client: GitHubApiClient
+  private repoMetadata: RepoMetadataCache
+  private issueCache: IssueCache
 
-  // Cache for issue data to save GET calls (key: issue number)
-  // Store the full response to reuse across sweep and unmark
-  private issueCache = new Map<number, any>()
+  private repository!: Repository
+  private responseRequiredLabel!: Label
+  private optionalFollowUpLabel?: Label
 
-  constructor(config: Config) {
-    this.config = config
-    this.octokit = github.getOctokit(this.config.token)
+  constructor(private config: Config) {
+    this.gracePeriodMs = 1000 * 60 * 15 // minutes
+    this.client = new GitHubApiClient(config.token)
+    this.repoMetadata = new RepoMetadataCache(this.client)
+    this.issueCache = new IssueCache(this.client, this.repoMetadata)
+  }
+
+  private async initializeMetadata(): Promise<void> {
+    if (this.repository && this.responseRequiredLabel) return
+    const baseRepo = {
+      owner: this.config.repo.owner,
+      name: this.config.repo.repo
+    }
+    this.repository = await this.repoMetadata.getInitializedRepository(baseRepo)
+
+    this.responseRequiredLabel = {
+      name: this.config.responseRequiredLabel,
+      repo: this.repository,
+      color: this.config.responseRequiredColor
+    }
+
+    if (this.config.optionalFollowUpLabel) {
+      this.optionalFollowUpLabel = {
+        name: this.config.optionalFollowUpLabel,
+        repo: this.repository,
+        color: this.config.optionalFollowUpLabelColor || 'ffffff'
+      }
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   async sweep(): Promise<void> {
     core.debug('Starting sweep')
+    await this.initializeMetadata()
 
-    // Ensure the required label exists before processing
-    await this.ensureLabelExists(
-      this.config.responseRequiredLabel,
-      this.config.responseRequiredColor
-    )
+    await this.repoMetadata.createLabel(this.responseRequiredLabel)
 
-    const issues = await this.getCloseableIssues()
+    const writeBatchSize = 10
+    const interBatchDelayMs = 1000 * 2 // seconds (secondary rate-limit protection)
+    const stats = {
+      closed: { ok: 0, failed: 0 },
+      reopened: { ok: 0, failed: 0 }
+    }
 
-    const batchSize = 10
-    for (let i = 0; i < issues.length; i += batchSize) {
-      const currentBatch = issues.slice(i, i + batchSize)
+    // 1) Reopen pass (resilient)
+    const toReopen = await this.getReopenableIssues()
 
-      await Promise.all(
-        currentBatch.map((issue) =>
-          this.close({
-            issue_number: issue.number,
-            ...this.config.repo
-          })
-        )
+    for (let i = 0; i < toReopen.length; i += writeBatchSize) {
+      const counts = await this.runWriteBatch(
+        toReopen.slice(i, i + writeBatchSize),
+        async (details) => {
+          await this.reopenAndAdjustLabels(details.number)
+        },
+        (details) => ({ context: 'reopen', issueNumber: details.number })
       )
-    }
 
-    core.info(`Sweep complete. Processed ${issues.length} issues.`)
-  }
+      stats.reopened.ok += counts.ok
+      stats.reopened.failed += counts.failed
 
-  async removeLabels(): Promise<void> {
-    core.debug('Starting removeLabels')
-
-    const { optionalFollowUpLabel, responseRequiredLabel } = this.config
-    if (!optionalFollowUpLabel) {
-      return
-    }
-    const payload = github.context.payload as IssuesEvent
-    if (payload.action !== 'closed') {
-      return
-    }
-
-    const owner = payload.repository.owner.login
-    const repo = payload.repository.name
-    const { number } = payload.issue
-    const issue = { owner, repo, issue_number: number }
-
-    // if the issue closed by the issue author, check if optionalFollowUpLabel is present on the issue and then remove it
-    if (payload.issue.user.login === payload.sender.login) {
-      const labels = await this.octokit.rest.issues.listLabelsOnIssue(issue)
-      const plainLabels = labels.data.map((label: any) => label.name)
-
-      if (plainLabels.includes(responseRequiredLabel)) {
-        await this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: responseRequiredLabel
-        })
-      }
-
-      if (optionalFollowUpLabel && plainLabels.includes(optionalFollowUpLabel)) {
-        await this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: optionalFollowUpLabel
-        })
+      // delay between *write* batches
+      if (i + writeBatchSize < toReopen.length) {
+        await this.sleep(interBatchDelayMs)
       }
     }
-  }
 
-  async unmark(): Promise<void> {
-    core.debug('Starting unmark')
+    // Optional extra spacing between reopen and close phases
+    if (0 < toReopen.length) await this.sleep(interBatchDelayMs)
 
-    const { responseRequiredLabel, optionalFollowUpLabel, optionalFollowUpLabelColor } = this.config
-    const payload: IssueCommentEvent = await this.readPayload()
-    const owner = payload.repository.owner.login
-    const repo = payload.repository.name
-    const { number } = payload.issue
-    const comment = payload.comment
-    const issue = { owner, repo, issue_number: number }
+    // 2) Close pass (resilient + maxIssuesPerRun already enforced inside getCloseableIssues)
+    const toClose = await this.getCloseableIssues()
 
-    const issueInfo = await this.getIssueInfo(number)
-    const isMarked = issueInfo.labels.some((l: any) => l.name === responseRequiredLabel)
+    for (let i = 0; i < toClose.length; i += writeBatchSize) {
+      const counts = await this.runWriteBatch(
+        toClose.slice(i, i + writeBatchSize),
+        async (details) => {
+          await this.close(details.number)
+        },
+        (details) => ({ context: 'close', issueNumber: details.number })
+      )
 
-    if (isMarked && issueInfo.user?.login === comment.user.login) {
-      core.info(`${owner}/${repo}#${number} is being unmarked`)
+      stats.closed.ok += counts.ok
+      stats.closed.failed += counts.failed
 
-      const tasks: Promise<any>[] = [
-        this.octokit.rest.issues.removeLabel({
-          ...issue,
-          name: responseRequiredLabel
-        })
-      ]
-
-      if (optionalFollowUpLabel) {
-        tasks.push(
-          this.ensureLabelExists(
-            optionalFollowUpLabel,
-            optionalFollowUpLabelColor || 'ffffff'
-          ).then(() =>
-            this.octokit.rest.issues.addLabels({
-              ...issue,
-              labels: [optionalFollowUpLabel]
-            })
-          )
-        )
-      }
-
-      await Promise.all(tasks)
-
-      if (issueInfo.state === 'closed' && issueInfo.user.login !== issueInfo.closed_by?.login) {
-        // Re-open if the closer wasn't the author
-        await this.octokit.rest.issues.update({ ...issue, state: 'open' })
+      if (i + writeBatchSize < toClose.length) {
+        await this.sleep(interBatchDelayMs)
       }
     }
-  }
 
-  async close(issue: Issue): Promise<void> {
-    const { closeComment } = this.config
-
-    // Check cache first to see if we have the data
-    const issueData = this.issueCache.get(issue.issue_number)
-
-    core.info(`${issue.owner}/${issue.repo}#${issue.issue_number} is being closed`)
-
-    if (closeComment) {
-      await this.octokit.rest.issues.createComment({ body: closeComment, ...issue })
-    }
-
-    await this.octokit.rest.issues.update({
-      ...issue,
-      state: 'closed',
-      state_reason: 'not_planned'
-    })
-
-    // Update cache to reflect the new closed state
-    if (issueData) {
-      this.issueCache.set(issue.issue_number, {
-        ...issueData,
-        state: 'closed'
-      })
-    }
-  }
-
-  async ensureLabelExists(name: string, color: string): Promise<void> {
-    // If we've already verified this label in this run, skip the API calls
-    if (this.verifiedLabels.has(name)) {
-      return
-    }
-
-    try {
-      await this.octokit.rest.issues.getLabel({ name, ...this.config.repo })
-    } catch {
-      await this.octokit.rest.issues.createLabel({ name, color, ...this.config.repo })
-    }
-
-    this.verifiedLabels.set(name, true)
-  }
-
-  async findLastLabeledEvent(issue: Issue): Promise<TimelineEvent | undefined> {
-    const { responseRequiredLabel } = this.config
-
-    const events = (await this.octokit.paginate(this.octokit.rest.issues.listEvents, {
-      ...issue,
-      per_page: 100
-    })) as unknown as TimelineEvent[]
-
-    // Look for the 'closed' event to find who closed it
-    const closedEvent = events.findLast((e) => e.event === 'closed')
-    if (closedEvent) {
-      // Manually update your issueCache with the closer info to save a GET later
-      const cached = this.issueCache.get(issue.issue_number) || {}
-      this.issueCache.set(issue.issue_number, {
-        ...cached,
-        closed_by: closedEvent.actor
-      })
-    }
-
-    return events.findLast(
-      (event) => event.event === 'labeled' && event.label?.name === responseRequiredLabel
+    core.info(
+      `Sweep complete. Reopen: ok=${stats.reopened.ok}, failed=${stats.reopened.failed}. Close: ok=${stats.closed.ok}, failed=${stats.closed.failed}.`
     )
   }
 
-  async getCloseableIssues(): Promise<RestIssue[]> {
-    const { owner, repo } = this.config.repo
-    const { daysUntilClose, maxIssuesPerRun, responseRequiredLabel } = this.config
-    const q = `repo:${owner}/${repo} is:issue is:open label:"${responseRequiredLabel}"`
-    const labeledEarlierThan = this.since(daysUntilClose)
+  async handleLabeled(): Promise<void> {
+    await this.initializeMetadata()
+    const payload = github.context.payload as IssuesLabeledEvent
 
-    const issues = await this.octokit.paginate(this.octokit.rest.search.issuesAndPullRequests, {
-      q,
-      sort: 'created',
-      order: 'asc',
-      per_page: 100
-    })
+    if (payload.label?.name !== this.responseRequiredLabel.name) return
 
-    const tasks: (() => Promise<RestIssue | null>)[] = []
+    const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
 
-    // Seed the cache with search results
-    for (const issue of issues) {
-      this.issueCache.set(issue.number, issue)
+    core.info('Target label matched.')
+    await this.assignAuthor(issueDetails)
+  }
 
-      tasks.push(async () => {
-        const event = await this.findLastLabeledEvent({
-          issue_number: issue.number,
-          ...this.config.repo
-        })
+  /**
+   * Author comment handler (issue_comment.created)
+   *
+   * Intended behavior:
+   * - Re-open (or keep open) any issue where the *issue author* comments,
+   *   with the ONLY exception:
+   *     - if the author closed the issue themselves within the grace period
+   *       (default: 15 minutes), do not reopen (treat as a "thanks"/wrap-up).
+   *
+   * Rationale (IMPORTANT):
+   * - This action is intentionally allowed to reopen issues even when
+   *   `responseRequiredLabel` is not currently present. This is a deliberate
+   *   safety-net behavior for cases where the author cannot reopen the issue
+   *   themselves (email replies, permission restrictions) or when event-driven
+   *   processing is missed and the scheduled sweep later catches it.
+   *
+   * Post-conditions (when reopening OR already open):
+   * - remove `responseRequiredLabel` (if present),
+   * - unassign the author (if assigned via this workflow),
+   * - then (if configured) add `optionalFollowUpLabel`.
+   *
+   * Future note:
+   * - We may introduce an input to restrict reopen behavior to only issues that
+   *   previously participated in this workflow (e.g., only if
+   *   `responseRequiredLabel` was applied at some point). Do not “fix” this
+   *   by adding an `isLabeled(...responseRequiredLabel)` guard without that
+   *   explicit product decision.
+   */
+  async handleAuthorCommented(): Promise<void> {
+    await this.initializeMetadata()
+    const payload = github.context.payload as IssueCommentEvent
+    const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
 
-        if (!event) {
-          return null
-        }
+    // Verify: Only proceed if the commenter is the original author
+    if (issueDetails.user.login !== payload.comment.user.login) return
 
-        core.debug(`Checking: ${JSON.stringify(issue, null, 2)}`)
-        core.debug(`Using: ${JSON.stringify(event, null, 2)}`)
+    const { details } = await this.issueCache.ensureClosureDetails(issueDetails)
+    const isAuthorClosed = checkClosedByAuthor(details)
 
-        const creationDate = new Date(event.created_at)
+    /*
+     * CASE 1: Closed by someone else (Bot/Maintainer).
+     * Reopen immediately on author response.
+     */
+    if (!isAuthorClosed && 'closed' === issueDetails.state) {
+      core.info(
+        `Author responded to closed issue ${this.repository.owner}/${this.repository.name}#${issueDetails.number}. Reopening.`
+      )
+      await this.reopenAndAdjustLabels(issueDetails.number)
+      return
+    }
 
-        core.debug(
-          `${creationDate.toISOString()} < ${labeledEarlierThan.toISOString()} === ${
-            creationDate < labeledEarlierThan
-          }`
+    /*
+     * CASE 2: Closed by the author themselves.
+     * Reopen only if the comment happened after the grace period.
+     */
+    if (isAuthorClosed) {
+      const closedAt = details.closed_at.getTime()
+      const createdAt = toDate(payload.comment.created_at)
+      const commentedAt = createdAt ? createdAt.getTime() : Date.now()
+
+      if (this.gracePeriodMs < commentedAt - closedAt) {
+        core.info(
+          `Author follow-up on self-closed ${this.repository.owner}/${this.repository.name}#${issueDetails.number} after grace period. Reopening.`
         )
-        if (creationDate < labeledEarlierThan) {
-          return issue as RestIssue
-        }
-        return null
-      })
-    }
-
-    const batchSize = 10
-    const closableIssues: RestIssue[] = []
-    for (let i = 0; i < tasks.length; i += batchSize) {
-      if (closableIssues.length >= maxIssuesPerRun) {
-        break
+        await this.reopenAndAdjustLabels(issueDetails.number)
+      } else {
+        await this.clearWorkflowLabels(issueDetails)
       }
+      return
+    }
 
-      const currentBatch = tasks.slice(i, i + batchSize)
-      const results = await Promise.all(currentBatch.map((task) => task()))
+    /*
+     * CASE 3: Issue is OPEN.
+     */
+    if ('open' === issueDetails.state) {
+      await this.transitionToFollowUp(issueDetails)
+    }
+  }
 
-      for (const issue of results) {
-        if (issue) {
-          closableIssues.push(issue)
-          if (closableIssues.length >= maxIssuesPerRun) {
-            break
-          }
-        }
+  async handleClosedIssue(): Promise<void> {
+    if ('closed' !== github.context.payload.action) return
+
+    await this.initializeMetadata()
+    const payload = github.context.payload as IssuesEvent
+    const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
+
+    if (payload.issue.user.login !== payload.sender.login) return
+
+    await this.clearWorkflowLabels(issueDetails)
+  }
+
+  private async assignAuthor(issue: IssueDetails): Promise<void> {
+    const login = issue.user?.login
+    if (!login || 'unknown' === login) {
+      core.warning(
+        `Skipping author assignment addition for ${issue.repo.owner}/${issue.repo.name}#${issue.number}: missing/unknown author login.`
+      )
+      return
+    }
+    core.info(`Adding author assignee to issue #${issue.number}`)
+    return await this.client.addAssignees(issue, [login])
+  }
+
+  private async unassignAuthor(issue: IssueDetails): Promise<void> {
+    const login = issue.user?.login
+    if (!login || 'unknown' === login) {
+      core.warning(
+        `Skipping author assigment removal for ${issue.repo.owner}/${issue.repo.name}#${issue.number}: missing/unknown author login.`
+      )
+      return
+    }
+    core.info(`Removing author assignee from issue #${issue.number}`)
+    return await this.client.removeAssignees(issue, [login])
+  }
+
+  private async getReopenableIssues(): Promise<IssueDetails[]> {
+    const q = `repo:${this.repository.owner}/${this.repository.name} is:issue is:closed label:"${this.responseRequiredLabel.name}"`
+    const results = await this.client.octokit.paginate(
+      this.client.octokit.rest.search.issuesAndPullRequests,
+      { q, per_page: 100 }
+    )
+
+    const reopenable: IssueDetails[] = []
+    for (const raw of results) {
+      const issueDetails = await this.issueCache.fetch(this.repository, raw.number)
+      const { details, timeline } = await this.issueCache.ensureClosureDetails(issueDetails)
+
+      const closedAt =
+        (checkClosedByAuthor(details) ? this.gracePeriodMs : 0) + details.closed_at.getTime()
+      const events = timeline ?? (await this.client.fetchTimeline(details))
+      const authorResponded = events.some(
+        (e) =>
+          'commented' === e.event &&
+          details.user.login === e.actor.login &&
+          closedAt < e.created_at.getTime()
+      )
+      if (authorResponded) reopenable.push(details)
+    }
+    return reopenable
+  }
+
+  private async getCloseableIssues(): Promise<IssueDetails[]> {
+    const q = `repo:${this.repository.owner}/${this.repository.name} is:issue is:open label:"${this.responseRequiredLabel.name}"`
+    const results = await this.client.octokit.paginate(
+      this.client.octokit.rest.search.issuesAndPullRequests,
+      { q, per_page: 100 }
+    )
+
+    const closeable: IssueDetails[] = []
+    for (const raw of results) {
+      if (closeable.length >= this.config.maxIssuesPerRun) break
+      if (await this.verifyStaleStatus(raw.number)) {
+        closeable.push(await this.issueCache.fetch(this.repository, raw.number))
+      }
+    }
+    return closeable
+  }
+
+  private async verifyStaleStatus(number: number): Promise<boolean> {
+    const details = await this.issueCache.fetch(this.repository, number)
+    const timeline = await this.client.fetchTimeline(details)
+
+    const labeledEvents = timeline
+      .filter((e) => isTargetLabeledEvent(e, this.responseRequiredLabel))
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+
+    if (0 === labeledEvents.length) return false
+    const lastLabeled = labeledEvents[0]
+
+    if (lastLabeled.created_at.getTime() > getExpiryDate(this.config.daysUntilClose).getTime())
+      return false
+
+    return !timeline.some(
+      (e) =>
+        'commented' === e.event &&
+        details.user.login === e.actor.login &&
+        e.created_at.getTime() > lastLabeled.created_at.getTime()
+    )
+  }
+
+  private async close(number: number): Promise<void> {
+    const details = await this.issueCache.fetch(this.repository, number)
+    core.info(`Closing ${this.repository.owner}/${this.repository.name}#${number} as "not_planned"`)
+    if (this.config.closeComment) await this.client.createComment(details, this.config.closeComment)
+    const updated = await this.client.updateIssueState(
+      { ...details, state: 'closed' },
+      'not_planned'
+    )
+    await this.issueCache.set(updated)
+  }
+
+  private async reopenAndAdjustLabels(number: number): Promise<void> {
+    const details = await this.issueCache.fetch(this.repository, number)
+    const updated = await this.client.updateIssueState({ ...details, state: 'open' }, 'reopened')
+    await this.issueCache.set(updated)
+    await this.transitionToFollowUp(updated)
+  }
+
+  private async clearWorkflowLabels(issue: IssueDetails): Promise<void> {
+    const labelsToRemove = []
+    if (isLabeled(issue, this.responseRequiredLabel))
+      labelsToRemove.push(this.responseRequiredLabel)
+    if (this.optionalFollowUpLabel && isLabeled(issue, this.optionalFollowUpLabel))
+      labelsToRemove.push(this.optionalFollowUpLabel)
+
+    await this.issueCache.removeLabels(issue, labelsToRemove)
+  }
+
+  /**
+   * Normalizes an issue after author engagement:
+   * - If `responseRequiredLabel` is present, remove it and unassign the author.
+   * - If `optionalFollowUpLabel` is configured, add it.
+   *
+   * Note:
+   * - Today, optional follow-up can be applied even if the required label was
+   *   not present. This aligns with the “assist users who can’t reopen” default.
+   * - If we add a future config input to require prior workflow participation,
+   *   this is the place to conditionally apply the follow-up label based on
+   *   prior presence/history of `responseRequiredLabel`.
+   */
+  private async transitionToFollowUp(issue: IssueDetails): Promise<void> {
+    if (isLabeled(issue, this.responseRequiredLabel)) {
+      await this.issueCache.removeLabels(issue, [this.responseRequiredLabel])
+      await this.unassignAuthor(issue)
+    }
+
+    if (this.optionalFollowUpLabel) {
+      await this.repoMetadata.createLabel(this.optionalFollowUpLabel)
+      await this.issueCache.addLabels(issue, [this.optionalFollowUpLabel])
+    }
+  }
+
+  private formatOctokitError(error: any) {
+    // Octokit errors often carry: status, message, request, response.data
+    const status = error?.status
+    const message = error?.message || String(error)
+
+    const requestUrl =
+      error?.request?.url || error?.request?.endpoint || error?.request?.route || undefined
+
+    const documentationUrl = error?.response?.data?.documentation_url
+    const apiMessage = error?.response?.data?.message
+
+    return {
+      status,
+      message,
+      apiMessage,
+      requestUrl,
+      documentationUrl
+    }
+  }
+
+  private logSweepFailure(context: string, issueNumber: number, error: any): void {
+    const info = this.formatOctokitError(error)
+
+    core.warning(
+      [
+        `[sweep] ${context} failed for #${issueNumber}`,
+        info.status ? `status=${info.status}` : undefined,
+        info.message ? `message="${info.message}"` : undefined,
+        info.apiMessage ? `apiMessage="${info.apiMessage}"` : undefined,
+        info.requestUrl ? `requestUrl=${info.requestUrl}` : undefined,
+        info.documentationUrl ? `documentationUrl=${info.documentationUrl}` : undefined
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    )
+
+    // Useful for deep debugging in action logs
+    core.debug(`[sweep] error object: ${JSON.stringify(error, null, 2)}`)
+  }
+
+  /**
+   * Runs a batch of write operations with allSettled so one failure doesn't halt the run.
+   * Returns { ok, failed } counts for reporting.
+   */
+  private async runWriteBatch<T>(
+    batch: T[],
+    runner: (item: T) => Promise<void>,
+    describe: (item: T) => { context: string; issueNumber: number }
+  ): Promise<{ ok: number; failed: number }> {
+    const settled = await Promise.allSettled(batch.map((item) => runner(item)))
+    let ok = 0
+    let failed = 0
+
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i]
+      const meta = describe(batch[i])
+
+      if ('fulfilled' === result.status) {
+        ok++
+      } else {
+        failed++
+        this.logSweepFailure(meta.context, meta.issueNumber, result.reason)
       }
     }
 
-    core.debug(`Closeable: ${JSON.stringify(closableIssues, null, 2)}`)
-
-    return closableIssues as RestIssue[]
-  }
-
-  async hasResponseRequiredLabel(issue: Issue): Promise<boolean> {
-    const labels = await this.octokit.rest.issues.listLabelsOnIssue({ ...issue })
-
-    return labels.data.some((label: any) => label.name === this.config.responseRequiredLabel)
-  }
-
-  async readPayload(): Promise<IssueCommentEvent> {
-    if (!process.env.GITHUB_EVENT_PATH) {
-      throw new Error('GITHUB_EVENT_PATH is not defined')
-    }
-
-    const text = (await fsp.readFile(process.env.GITHUB_EVENT_PATH)).toString()
-
-    return JSON.parse(text)
-  }
-
-  async getIssueInfo(issue_number: number): Promise<any> {
-    // Check if we already have the data from a search or previous fetch
-    const cached = this.issueCache.get(issue_number)
-    if (cached && cached.labels) {
-      core.debug(`Cache hit for issue #${issue_number}`)
-      return cached
-    }
-
-    // Cache miss: perform the API call
-    core.debug(`Fetching full data for issue #${issue_number}...`)
-    const { data } = await this.octokit.rest.issues.get({
-      ...this.config.repo,
-      issue_number
-    })
-
-    // Merge: Keep any 'closed_by' info we found in the timeline while
-    // filling in the rest of the issue details from the API.
-    const mergedData = { ...data, ...cached }
-
-    // Store it so we don't fetch it again
-    this.issueCache.set(issue_number, mergedData)
-    return mergedData
-  }
-
-  since(days: number): Date {
-    const ttl = days * 24 * 60 * 60 * 1000
-
-    return new Date(Date.now() - ttl)
+    return { ok, failed }
   }
 }

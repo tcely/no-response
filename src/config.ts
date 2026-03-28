@@ -71,12 +71,12 @@ export default class Config {
 
     const tokenInput = core.getInput('token')
     const tokenEnvVar = process.env['GITHUB_TOKEN']
-    this.token = tokenInput || tokenEnvVar || '';
+    this.token = tokenInput || tokenEnvVar || ''
 
     if (!this.token) {
       throw new Error(
         "GitHub token not found. Pass 'token' input or set the GITHUB_TOKEN environment variable."
-      );
+      )
     }
 
     this.optionalFollowUpLabel = core.getInput('optionalFollowUpLabel') || undefined

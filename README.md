@@ -113,7 +113,7 @@ See [`action.yml`](action.yml) for full defaults.
 
 | Input                        | Description                                           | Default                              |
 | :--------------------------- | :---------------------------------------------------- | :----------------------------------- |
-| `token`                      | **Required**. GitHub token (e.g. `${{ token }}`)      | N/A                                  |
+| `token`                      | GitHub token for API access.                          | `${{ github.token }}`            |
 | `daysUntilClose`             | Days to wait before closing an inactive issue.        | `14`                                 |
 | `responseRequiredLabel`      | Label indicating a response is needed.                | `more-information-needed`            |
 | `responseRequiredColor`      | Hex color for the response label.                     | `ffffff`                             |

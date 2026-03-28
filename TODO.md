@@ -22,7 +22,7 @@
 
 ## Documentation
 
-- [ ] **Token Documentation Update**: After implementing the optional token logic in `src/config.ts`, update the README "Inputs" table to reflect that the token is no longer strictly required via `with:`.
+- [x] **Token Documentation Update**: After implementing the optional token logic in `src/config.ts`, update the README "Inputs" table to reflect that the token is no longer strictly required via `with:`.
 - [ ] **README Update**: Document all new inputs (`dryRun`).
 - [ ] **Migration Note**: Add a section explaining the transition from the legacy logic to this refactored version.
 

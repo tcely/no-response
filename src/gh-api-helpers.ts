@@ -45,18 +45,32 @@ export function toDate(dateStr?: string | null): Date | undefined {
  * Maps a raw GitHub API response to a clean IssueDetails object.
  */
 export function mapRestIssue(raw: any, repo: Repository): IssueDetails {
-  return {
+  const closedAt = toDate(raw.closed_at)
+  const date_closedAt = closedAt ?? new Date()
+
+  const openIssue = {
     number: raw.number,
     repo,
-    state: raw.state,
+    state: 'open' as 'open',
     user: { login: raw.user?.login || 'unknown' },
     labels: (raw.labels || []).map((l: any) => ({
       name: 'string' === typeof l ? l : l.name!,
       repo,
       color: ('string' === typeof l ? '' : l.color) || 'ffffff'
     })),
-    closed_by: raw.closed_by ? { login: raw.closed_by.login } : undefined,
-    closed_at: toDate(raw.closed_at)
+    closed_by: undefined,
+    closed_at: undefined
+  }
+
+  if ('closed' === raw.state) {
+    return {
+      ...openIssue,
+      state: 'closed' as 'closed',
+      closed_by: raw.closed_by ? { login: raw.closed_by.login } : undefined,
+      closed_at: date_closedAt
+    }
+  } else {
+    return openIssue
   }
 }
 

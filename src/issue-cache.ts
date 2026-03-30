@@ -3,7 +3,7 @@
 import { GitHubApiClient } from './gh-api-client'
 import { findLastClosedEvent } from './logic-helpers'
 import { RepoMetadataCache } from './repo-metadata-cache'
-import { Issue, IssueDetails, Label, Repository, TimelineEvent } from './types'
+import { ClosedIssueDetails, Issue, IssueDetails, Label, Repository, TimelineEvent } from './types'
 
 export class IssueCache {
   // Key format: "repoNodeId:issueNumber"
@@ -101,19 +101,20 @@ export class IssueCache {
       return { details, timeline: undefined }
     }
 
+    const closedIssue: ClosedIssueDetails = details
     const timeline = await this.client.fetchTimeline(details)
     const lastClosed = findLastClosedEvent(timeline)
     if (lastClosed === undefined) {
-      if (missingClosedAt) details.closed_at = new Date(0)
-      if (missingCloser) details.closed_by = { login: 'unknown' }
+      if (missingClosedAt) closedIssue.closed_at = new Date(0)
+      if (missingCloser) closedIssue.closed_by = { login: 'unknown' }
       return { details, timeline }
     }
 
     // Patch what we can from timeline
-    if (missingCloser || suspiciousCloser) details.closed_by = { login: lastClosed.actor.login }
+    if (missingCloser || suspiciousCloser) closedIssue.closed_by = { login: lastClosed.actor.login }
 
     // Optional: timeline "closed" created_at can be used if REST closed_at is missing
-    if (missingClosedAt) details.closed_at = lastClosed.created_at
+    if (missingClosedAt) closedIssue.closed_at = lastClosed.created_at
 
     await this.set(details)
     return { details, timeline }

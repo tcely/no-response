@@ -15,7 +15,7 @@ import {
   isTargetLabeledEvent
 } from './logic-helpers'
 import { RepoMetadataCache } from './repo-metadata-cache'
-import { Repository, Label, Issue, IssueDetails } from './types'
+import { ClosedIssueDetails, Repository, Label, Issue, IssueDetails } from './types'
 
 export default class NoResponse {
   private gracePeriodMs = 1000 * 60 * 15 // minutes
@@ -179,7 +179,7 @@ export default class NoResponse {
      * CASE 1: Closed by someone else (Bot/Maintainer).
      * Reopen immediately on author response.
      */
-    if (!isAuthorClosed && 'closed' === issueDetails.state) {
+    if (!isAuthorClosed && 'closed' === details.state) {
       core.info(
         `Author responded to closed issue ${this.repository.owner}/${this.repository.name}#${issueDetails.number}. Reopening.`
       )
@@ -191,8 +191,9 @@ export default class NoResponse {
      * CASE 2: Closed by the author themselves.
      * Reopen only if the comment happened after the grace period.
      */
-    if (isAuthorClosed) {
-      const closedAt = details.closed_at.getTime()
+    if (isAuthorClosed && 'closed' === details.state) {
+      const closedIssue: ClosedIssueDetails = details
+      const closedAt = closedIssue.closed_at.getTime()
       const createdAt = toDate(payload.comment.created_at)
       const commentedAt = createdAt ? createdAt.getTime() : Date.now()
 
@@ -262,10 +263,13 @@ export default class NoResponse {
     const reopenable: IssueDetails[] = []
     for (const raw of results) {
       const issueDetails = await this.issueCache.fetch(this.repository, raw.number)
+      if ('closed' !== issueDetails.state) continue
       const { details, timeline } = await this.issueCache.ensureClosureDetails(issueDetails)
+      if ('closed' !== details.state) continue
 
+      const closedIssue: ClosedIssueDetails = details
       const closedAt =
-        (checkClosedByAuthor(details) ? this.gracePeriodMs : 0) + details.closed_at.getTime()
+        (checkClosedByAuthor(details) ? this.gracePeriodMs : 0) + closedIssue.closed_at.getTime()
       const events = timeline ?? (await this.client.fetchTimeline(details))
       const authorResponded = events.some(
         (e) =>

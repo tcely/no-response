@@ -2,6 +2,7 @@ The MIT License (MIT)
 
 Copyright &copy; 2021 [Lee Dohm](https://www.lee-dohm.com)  
 Copyright &copy; 2023 [Bilal Shafi](https://BilalShafi.dev)
+Copyright &copy; 2026 [tcely](https://github.com/tcely)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in

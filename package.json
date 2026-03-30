@@ -1,5 +1,5 @@
 {
-  "name": "no-response-tcely",
+  "name": "no-response",
   "version": "0.2.1",
   "private": true,
   "description": "A GitHub Action that closes Issues where the author hasn't responded to a request for more information",
@@ -23,7 +23,7 @@
     "bun",
     "typescript"
   ],
-  "author": "lee-dohm",
+  "author": "tcely",
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^3.0.0",

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "no-response-tcely",
+      "name": "no-response",
       "dependencies": {
         "@actions/core": "^3.0.0",
         "@actions/github": "^9.0.0",

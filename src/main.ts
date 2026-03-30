@@ -34,7 +34,7 @@ async function run(): Promise<void> {
       if ('labeled' === eventType) {
         await noResponse.handleLabeled()
       } else if ('closed' === eventType) {
-        await noResponse.handleClosedIssueVerbose()
+        await noResponse.handleClosedIssue()
       } else {
         core.info(`Unrecognized issues type: ${eventType}`)
       }

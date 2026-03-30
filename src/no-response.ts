@@ -228,65 +228,6 @@ export default class NoResponse {
     await this.clearWorkflowLabels(issueDetails)
   }
 
-  async handleClosedIssueVerbose(): Promise<void> {
-    const eventName = github.context.eventName
-    const payload = github.context.payload as IssuesEvent
-    const action = payload.action
-
-    // Phase 1: Entry & Logic Gate
-    core.info(`[handleClosedIssue][Phase 1: Entry] Event: "${eventName}" | Action: "${action}"`)
-
-    if (eventName !== 'issues' || action !== 'closed') {
-      core.info(
-        `[handleClosedIssue][Exit] Skipping: handleClosedIssue only processes 'issues' events with a 'closed' action.`
-      )
-      return
-    }
-
-    // Phase 2: Identity Correlation
-    const issueNumber = payload.issue.number
-    const issueAuthorId = payload.issue.user?.id ?? -1
-
-    // Use payload sender ID as primary, fallback to context actor ID, then -1
-    const eventSenderId = payload.sender?.id ?? Number(process.env['GITHUB_ACTOR_ID'] || -1)
-
-    core.info(
-      `[handleClosedIssue][Phase 2: Identity Correlation]\n  - Issue:     #${issueNumber}\n  - Author ID: ${issueAuthorId}\n  - Sender ID: ${eventSenderId} (Primary: payload.sender, Fallback: GITHUB_ACTOR_ID)`
-    )
-
-    // Phase 3: Authorization Logic
-    const isAuthorClose = issueAuthorId !== -1 && issueAuthorId === eventSenderId
-    core.info(`[handleClosedIssue][Phase 3: Logic Check] Is Author the Closer? ${isAuthorClose}`)
-
-    if (!isAuthorClose) {
-      core.info(
-        `[handleClosedIssue][Exit] Identity mismatch: Labels are only cleared when the original author closes the issue.`
-      )
-      return
-    }
-
-    // Phase 4: Execution
-    core.info(
-      `[handleClosedIssue][Phase 4: Execution] Initializing metadata and fetching labels for #${issueNumber}...`
-    )
-
-    // Only initialize metadata once we are committed to the execution
-    await this.initializeMetadata()
-
-    const issueDetails = await this.issueCache.fetch(this.repository, issueNumber)
-    const currentLabels = issueDetails.labels.map((l) => l.name)
-    const targetLabel = this.responseRequiredLabel.name
-
-    core.info(
-      `[handleClosedIssue] Target: "${targetLabel}" | Active: [${currentLabels.join(', ')}]`
-    )
-
-    core.info(`[handleClosedIssue][Action] Calling clearWorkflowLabels for #${issueNumber}...`)
-    await this.clearWorkflowLabels(issueDetails)
-
-    core.info(`[handleClosedIssue][Success] Cleanup completed for #${issueNumber}.`)
-  }
-
   private async assignAuthor(issue: IssueDetails): Promise<void> {
     const login = issue.user?.login
     if (!login || 'unknown' === login) {

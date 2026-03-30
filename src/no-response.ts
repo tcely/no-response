@@ -216,13 +216,14 @@ export default class NoResponse {
   }
 
   async handleClosedIssue(): Promise<void> {
-    if ('closed' !== github.context.payload.action) return
+    const payload = github.context.payload as IssuesEvent
+    if ('issues' !== github.context.eventName || 'closed' !== payload.action) return
+
+    const senderId = payload.sender?.id
+    if (!senderId || senderId !== payload.issue.user?.id) return
 
     await this.initializeMetadata()
-    const payload = github.context.payload as IssuesEvent
     const issueDetails = await this.issueCache.fetch(this.repository, payload.issue.number)
-
-    if (payload.issue.user.login !== payload.sender.login) return
 
     await this.clearWorkflowLabels(issueDetails)
   }

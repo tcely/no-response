@@ -65,7 +65,7 @@ jobs:
       # Required for labels and assignees
       issues: write
     steps:
-      - uses: tcely/no-response@v0.2.0
+      - uses: tcely/no-response@v0.2.1
         with:
           token: ${{ github.token }}
 ```
@@ -94,7 +94,7 @@ jobs:
       # Required for labels and assignees
       issues: write
     steps:
-      - uses: tcely/no-response@v0.2.0
+      - uses: tcely/no-response@v0.2.1
         with:
           token: ${{ github.token }}
           daysUntilClose: 7
@@ -138,7 +138,7 @@ If you want the action to close issues silently without posting a comment, set t
 
 ```yml
     steps:
-      - uses: tcely/no-response@v0.2.0
+      - uses: tcely/no-response@v0.2.1
         with:
           token: ${{ github.token }}
           closeComment: 'false'

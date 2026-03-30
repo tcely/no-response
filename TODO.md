@@ -1,9 +1,5 @@
 # Project Improvements & Refactors
 
-## action.yml (Composite Action)
-
-- [x] **Simplify Run Step**: Remove the `env:` block from the `Run Action` step. GitHub automatically exports all `inputs` as `INPUT_<UPPERCASE_NAME>` environment variables.
-
 ## src/no-response.ts (Orchestrator)
 
 - [ ] **Summary Output**: Use `core.summary` to generate a high-level report (scanned, closed, and reopened counts) on the GitHub Action run page.

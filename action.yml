@@ -18,11 +18,12 @@ inputs:
   responseRequiredLabel:
     description: Label indicating that a response from the original author is required
     default: more-information-needed
+  optionalFollowUpColor:
+    description: Color for the `optionalFollowUpLabel`
   optionalFollowUpLabel:
     description: Label that will be added after the required label will be removed
   optionalFollowUpLabelColor:
-    description: Color for the `optionalFollowUpLabel`
-    default: ffffff
+    description: 'Compatibility: Color for the `optionalFollowUpLabel`'
   maxIssuesPerRun:
     description: Number of Issues to close per workflow run
     default: 50
@@ -83,8 +84,9 @@ runs:
         INPUT_DAYSUNTILCLOSE: ${{ inputs.daysUntilClose }}
         INPUT_RESPONSEREQUIREDCOLOR: ${{ inputs.responseRequiredColor }}
         INPUT_RESPONSEREQUIREDLABEL: ${{ inputs.responseRequiredLabel }}
-        INPUT_OPTIONALFOLLOWUPCOLOR: ${{ inputs.optionalFollowUpLabelColor }}
+        INPUT_OPTIONALFOLLOWUPCOLOR: ${{ inputs.optionalFollowUpColor }}
         INPUT_OPTIONALFOLLOWUPLABEL: ${{ inputs.optionalFollowUpLabel }}
+        INPUT_OPTIONALFOLLOWUPLABELCOLOR: ${{ inputs.optionalFollowUpLabelColor }}
         INPUT_MAXISSUESPERRUN: ${{ inputs.maxIssuesPerRun }}
       run: ./bin/no-response-bin
 

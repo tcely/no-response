@@ -53,7 +53,7 @@ export default class NoResponse {
       this.optionalFollowUpLabel = {
         name: this.config.optionalFollowUpLabel,
         repo: this.repository,
-        color: this.config.optionalFollowUpLabelColor || 'ffffff'
+        color: this.config.optionalFollowUpColor || 'ffffff'
       }
     }
   }

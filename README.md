@@ -118,7 +118,7 @@ See [`action.yml`](action.yml) for full defaults.
 | `responseRequiredLabel`      | Label indicating a response is needed.                | `more-information-needed`            |
 | `responseRequiredColor`      | Hex color for the response label.                     | `ffffff`                             |
 | `optionalFollowUpLabel`      | Label to add after the author responds.               | `undefined`                          |
-| `optionalFollowUpLabelColor` | Hex color for the follow-up label.                    | `ffffff`                             |
+| `optionalFollowUpColor`      | Hex color for the follow-up label.                    | `ffffff`                             |
 | `maxIssuesPerRun`            | Maximum number of issues to close per scheduled run.  | `50`                                 |
 | `closeComment`               | Optional comment on close. Set to `false` to disable. | (Standard message)[^default-comment] |
 

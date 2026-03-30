@@ -36,8 +36,8 @@ export default class Config {
   /** An optional label to add when the `responseRequiredLabel` gets removed due to issue author's reply */
   readonly optionalFollowUpLabel?: string
 
-  /** An optional label to add when the `responseRequiredLabel` gets removed due to issue author's reply */
-  readonly optionalFollowUpLabelColor?: string
+  /** Color to use when creating the label, encoded as a hex string. */
+  readonly optionalFollowUpColor?: string
 
   readonly maxIssuesPerRun: number
 
@@ -81,7 +81,10 @@ export default class Config {
 
     this.optionalFollowUpLabel = core.getInput('optionalFollowUpLabel') || undefined
 
-    this.optionalFollowUpLabelColor = core.getInput('optionalFollowUpLabelColor') || undefined
+    this.optionalFollowUpColor =
+      core.getInput('optionalFollowUpColor') ||
+      core.getInput('optionalFollowUpLabelColor') ||
+      'ffffff'
   }
 
   valueOrDefault(value: string, defaultValue: string): string {
